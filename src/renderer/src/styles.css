@@ -83,3 +83,116 @@ td { padding: 8px 10px; border-bottom: 1px solid var(--hairline-soft); color: va
 tbody tr:hover { background: var(--primary-tint); }
 td:first-child { color: var(--ink); font-weight: 500; }
 td:last-child { font-family: var(--font-mono); font-size: 13px; }
+
+/* ================= 编辑器（制版工作台） ================= */
+.editor-head h1 { margin-bottom: var(--sp-sm); }
+
+/* 阶段条：制版师工作流的 UI 映射 */
+.stage-strip {
+  display: flex; gap: var(--sp-xs); list-style: none; padding: 0; margin: 0 0 var(--sp-md);
+  flex-wrap: wrap;
+}
+.stage-strip li {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.24px; color: var(--muted-soft);
+  background: var(--canvas); border: 1px solid var(--hairline);
+  padding: 5px 12px; border-radius: var(--r-full);
+}
+.stage-strip li.done { color: var(--primary-deep); border-color: var(--primary-tint); background: var(--primary-tint); }
+.stage-strip .stage-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: var(--r-full);
+  background: var(--surface-strong); color: var(--muted); font-size: 10px;
+}
+.stage-strip li.done .stage-num { background: var(--primary); color: #fff; }
+
+/* 上传 dropzone（SuperHi 高光笔 hover） */
+.dropzone {
+  position: relative;
+  background: var(--surface-soft); border: 2px dashed var(--border-strong);
+  border-radius: var(--r-lg); padding: var(--sp-xxl);
+  text-align: center; cursor: pointer; transition: background .12s, border-color .12s;
+}
+.dropzone:hover, .dropzone.over { background: var(--thread-yellow-soft); border-color: var(--ink); }
+.dropzone-title { font-size: 20px; font-weight: 600; color: var(--ink); }
+.dropzone-sub {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.24px;
+  text-transform: uppercase; color: var(--muted); margin-top: var(--sp-xs);
+}
+.badge-new {
+  position: absolute; top: var(--sp-base); right: var(--sp-base);
+  background: var(--thread-yellow); color: var(--ink);
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: var(--r-full);
+}
+
+/* 图片对照区 */
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-base); }
+.pane h2 { margin-bottom: var(--sp-xs); }
+.img-frame {
+  background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-md);
+  min-height: 280px; display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.img-frame img { max-width: 100%; max-height: 420px; display: block; object-fit: contain; }
+.img-placeholder {
+  color: var(--muted); font-family: var(--font-mono); font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.24px; padding: var(--sp-xl);
+}
+
+.mono-meta {
+  font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+  margin-top: var(--sp-xs); word-break: break-all;
+}
+
+/* 行动区 */
+.editor-actions { display: flex; gap: var(--sp-sm); margin: var(--sp-md) 0; }
+.btn-pill {
+  background: var(--primary); color: var(--on-primary); border: none; cursor: pointer;
+  font-family: var(--font-text); font-size: 15px; font-weight: 600;
+  height: 48px; padding: 0 28px; border-radius: var(--r-full);
+}
+.btn-pill:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-pill:active:not(:disabled) { background: var(--primary-active); }
+.btn-pill:disabled { background: var(--primary-disabled); cursor: not-allowed; }
+.btn-outline {
+  background: var(--canvas); color: var(--ink); border: 1px solid var(--ink); cursor: pointer;
+  font-family: var(--font-text); font-size: 15px; font-weight: 600;
+  height: 48px; padding: 0 24px; border-radius: var(--r-sm);
+}
+.btn-outline:hover { background: var(--surface-soft); }
+
+/* 错误盒 */
+.error-box {
+  background: #fee7e7; border: 1px solid var(--thread-red); color: var(--ink);
+  border-radius: var(--r-sm); padding: var(--sp-sm) var(--sp-base);
+  font-size: 14px; margin-bottom: var(--sp-base); word-break: break-all;
+}
+
+/* 绣线色片 & 针法贴纸 */
+.chip-row { display: flex; gap: var(--sp-xs); flex-wrap: wrap; margin: var(--sp-sm) 0; }
+.thread-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--r-full);
+  padding: 6px 14px; font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  letter-spacing: 0.24px; text-transform: uppercase; color: var(--ink);
+}
+.thread-chip i { width: 12px; height: 12px; border-radius: var(--r-full); display: inline-block; border: 1px solid rgba(0,0,0,.12); }
+.thread-chip.sm { padding: 2px 8px; font-size: 11px; }
+.thread-chip.sm i { width: 10px; height: 10px; }
+
+.stitch-tag {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: var(--r-full); color: var(--ink);
+  background: var(--surface-strong);
+}
+.stitch-tag.satin { background: var(--thread-orange); }
+.stitch-tag.tatami { background: var(--thread-green); color: #fff; }
+.stitch-tag.run { background: var(--thread-pink); }
+
+/* 方案卡 hover 不浮起（编辑器内密度优先） */
+.plan-card:hover { box-shadow: none; }
+.plan-card table { margin-top: var(--sp-sm); }

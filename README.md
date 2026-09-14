@@ -73,7 +73,7 @@ pnpm run dist       # 打包安装包
 
 ## 架构
 
-核心文档：[DESIGN.md](DESIGN.md)（设计语言）· [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DATA_FLYWHEEL.md](docs/DATA_FLYWHEEL.md) · [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md) · [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md)。
+核心文档：[DESIGN.md](DESIGN.md)（设计语言）· [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DATA_FLYWHEEL.md](docs/DATA_FLYWHEEL.md) · [docs/PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md) · [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md) · [docs/research/digitizing-workflow.html](docs/research/digitizing-workflow.html)（制版师工作流与术语调研，双语）。
 
 核心链路：
 图片 → 制版 Agent 方案 → ComfyUI 风格化/局部修改 → 制版核心转针迹 → 导出 DST/PES/JEF。

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, ExportRequest } from '@shared/types'
 
@@ -8,7 +8,19 @@ const api = {
   comfy: {
     status: () => ipcRenderer.invoke(IpcChannels.comfyStatus),
     submitWorkflow: (wf: Record<string, unknown>) =>
-      ipcRenderer.invoke(IpcChannels.comfySubmitWorkflow, wf)
+      ipcRenderer.invoke(IpcChannels.comfySubmitWorkflow, wf),
+    stylize: (imagePath: string, maxColors?: number, denoise?: number) =>
+      ipcRenderer.invoke(IpcChannels.comfyStylize, { imagePath, maxColors, denoise }),
+    onProgress: (cb: (msg: string) => void) => {
+      const l = (_e: unknown, msg: string) => cb(msg)
+      ipcRenderer.on(IpcChannels.comfyProgress, l)
+      return () => ipcRenderer.removeListener(IpcChannels.comfyProgress, l)
+    }
+  },
+  files: {
+    selectImage: (): Promise<string | null> => ipcRenderer.invoke(IpcChannels.selectImage),
+    readImageDataUrl: (path: string): Promise<string> => ipcRenderer.invoke(IpcChannels.readImageDataUrl, path),
+    pathForFile: (f: File): string => webUtils.getPathForFile(f)
   },
   sidecar: {
     status: () => ipcRenderer.invoke(IpcChannels.sidecarStatus),

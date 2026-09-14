@@ -86,5 +86,6 @@ export interface AppSettings {
   dataRoot: string // 默认 E:/Project-刺绣机
   comfyuiUrl: string
   comfyuiExe: string // D:/comfyui/ComfyUI.exe
+  comfyCheckpoint: string // ComfyUI 中的底模文件名
   sidecarUrl: string
 }

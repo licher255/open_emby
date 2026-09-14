@@ -5,7 +5,11 @@ export const IpcChannels = {
   // ComfyUI
   comfyStatus: 'comfyui:status',
   comfySubmitWorkflow: 'comfyui:submit-workflow',
+  comfyStylize: 'comfyui:stylize', // 图生图：平涂色块化（风格化第一步）
   comfyProgress: 'comfyui:progress', // main -> renderer push
+  // 文件
+  selectImage: 'dialog:select-image',
+  readImageDataUrl: 'fs:read-image-data-url',
   // Sidecar (制版核心 / Agent)
   sidecarStatus: 'sidecar:status',
   sidecarDigitizePlan: 'sidecar:digitize-plan',
