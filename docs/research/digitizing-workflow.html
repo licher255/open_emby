@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Embroidery Digitizing — Industrial Workflow & Terminology | 刺绣制版工业流程与术语</title>
+<style>
+  :root {
+    --primary:#2727e6; --primary-deep:#121297; --primary-tint:#dedefb;
+    --ink:#111118; --body:#58585d; --muted:#757579;
+    --canvas:#fff; --surface:#f6f6f6; --hairline:#d9d9d9;
+    --yellow:#ffda00; --green:#16ab59; --orange:#ff7715; --pink:#ffbac4; --warm-blue:#91d8ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Inter',-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;
+         background:var(--canvas); color:var(--ink); line-height:1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 32px 96px; }
+  header.top { display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--hairline); padding-bottom:24px; margin-bottom:40px; }
+  h1 { font-size:30px; letter-spacing:-0.3px; margin:0; }
+  h1 em { color:var(--primary); font-style:normal; }
+  .lang-switch { display:flex; gap:4px; background:var(--surface); border-radius:9999px; padding:4px; }
+  .lang-switch button { border:none; background:transparent; padding:8px 20px; border-radius:9999px;
+    font:600 13px/1 'Inter',sans-serif; cursor:pointer; color:var(--muted); }
+  .lang-switch button.on { background:var(--primary); color:#fff; }
+  h2 { font-size:21px; margin:48px 0 8px; padding-top:24px; border-top:1px solid var(--hairline); }
+  h2 .num { font-family:'IBM Plex Mono',monospace; color:var(--primary); margin-right:10px; }
+  p, li { color:var(--body); font-size:15px; }
+  .lead { font-size:17px; color:var(--ink); }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin:16px 0; }
+  th { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+       letter-spacing:.4px; color:var(--muted); text-align:left; padding:8px 12px;
+       border-bottom:2px solid var(--ink); }
+  td { padding:8px 12px; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  td.en { font-weight:600; color:var(--ink); white-space:nowrap; }
+  td.cn { color:var(--ink); white-space:nowrap; }
+  .stage { border:1px solid var(--hairline); border-radius:16px; padding:20px 24px; margin:14px 0; }
+  .stage h3 { margin:0 0 6px; font-size:16px; }
+  .stage .tags { margin:4px 0 8px; display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:.4px;
+    text-transform:uppercase; padding:3px 10px; border-radius:9999px; }
+  .tag.ai { background:var(--yellow); color:var(--ink); }
+  .tag.rust { background:var(--ink); color:#fff; }
+  .tag.comfy { background:var(--primary-tint); color:var(--primary-deep); }
+  .tag.ui { background:var(--pink); color:var(--ink); }
+  .tag.manual { background:var(--surface); color:var(--muted); border:1px solid var(--hairline); }
+  .stage .io { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); margin-top:8px; }
+  .stage .io b { color:var(--primary-deep); }
+  .stitch-satin{ background:var(--orange);} .stitch-tatami{ background:var(--green); color:#fff;}
+  .stitch-run{ background:var(--pink);} .stitch-special{ background:var(--warm-blue);}
+  .note { background:var(--surface); border-radius:12px; padding:14px 18px; font-size:14px; margin:16px 0; }
+  .note b { color:var(--ink); }
+  kbd { font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--surface);
+    border:1px solid var(--hairline); border-radius:6px; padding:1px 6px; }
+  [data-cn] { display:none; }
+  body.lang-cn [data-en] { display:none; }
+  body.lang-cn [data-cn] { display:block; }
+  body.lang-cn span[data-cn], body.lang-cn td[data-cn], body.lang-cn li[data-cn],
+  body.lang-cn h1[data-cn], body.lang-cn h2[data-cn], body.lang-cn h3[data-cn] { display:revert; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1 data-en>Embroidery <em>Digitizing</em>: Industrial Workflow &amp; Terminology</h1>
+  <h1 data-cn>刺绣<em>制版</em>：工业流程与术语</h1>
+  <div class="lang-switch">
+    <button id="btn-en" class="on" onclick="setLang('en')">EN</button>
+    <button id="btn-cn" onclick="setLang('cn')">中文</button>
+  </div>
+</header>
+
+<p class="lead" data-en>
+Research basis for the open_emby product design: how a professional embroidery digitizer
+(制版师) actually works — from artwork to machine file — and how each step maps to our
+AI Agent, Rust core, and ComfyUI pipeline. Sources: Wilcom / Tajima DGML workflows,
+industry digitizing guides (Impressions, DigitEMB, digitizing cheat sheets), and CN industry usage (电脑绣花打版).
+</p>
+<p class="lead" data-cn>
+本文是 open_emby 产品设计的调研基础：专业刺绣制版师从图稿到机器文件的真实工作流，
+以及每一步如何映射到我们的 AI Agent、Rust 核心与 ComfyUI 流水线。
+来源：Wilcom / Tajima DGML 工作流、行业制版指南（Impressions、DigitEMB、制版速查表）与中文行业用法（电脑绣花打版）。
+</p>
+
+<!-- ==================== WORKFLOW ==================== -->
+<h2 data-en><span class="num">01</span>The Digitizer's Workflow (制版师工作流)</h2>
+<h2 data-cn><span class="num">01</span>制版师工作流（The Digitizer's Workflow）</h2>
+
+<p data-en>The industrial loop a puncher/digitizer follows in Wilcom, Tajima DGML or similar suites.
+Each stage lists its open_emby owner: <span class="tag ui">UI</span> <span class="tag comfy">ComfyUI</span>
+<span class="tag rust">Rust core</span> <span class="tag ai">AI Agent</span> <span class="tag manual">Manual/Factory</span>.</p>
+<p data-cn>制版师在 Wilcom、Tajima DGML 等软件中的工业闭环。每个阶段标注 open_emby 的负责模块：
+<span class="tag ui">UI</span> <span class="tag comfy">ComfyUI</span> <span class="tag rust">Rust 核心</span>
+<span class="tag ai">AI Agent</span> <span class="tag manual">人工/工厂</span>。</p>
+
+<div class="stage">
+  <h3 data-en>1 · Artwork Intake &amp; Evaluation <span style="color:var(--muted)">/ 图稿导入与评估</span></h3>
+  <h3 data-cn>1 · 图稿导入与评估 <span style="color:var(--muted)">/ Artwork Intake &amp; Evaluation</span></h3>
+  <div class="tags"><span class="tag ui">UI</span><span class="tag ai">AI Agent</span></div>
+  <p data-en>Accept any artwork (PNG/JPG/SVG/photo/scan). The digitizer evaluates: target size (mm),
+  fabric &amp; stabilizer, stitch-count budget, and whether the art is even "stitchable" — fine gradients,
+  hairline details and small text must be simplified or dropped.</p>
+  <p data-cn>接收任意图稿（PNG/JPG/SVG/照片/扫描件）。制版师评估：目标尺寸（毫米）、面料与底衬、
+  针数预算，以及图稿是否"可绣"——细渐变、发丝级细节和过小文字必须简化或舍弃。</p>
+  <div class="io" data-en><b>In:</b> any image → <b>Out:</b> evaluation notes + target spec</div>
+  <div class="io" data-cn><b>输入：</b>任意图片 → <b>产出：</b>评估说明 + 目标规格</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>2 · Artwork Cleanup &amp; Color Blocking <span style="color:var(--muted)">/ 图稿整理与色块分离</span></h3>
+  <h3 data-cn>2 · 图稿整理与色块分离 <span style="color:var(--muted)">/ Cleanup &amp; Color Blocking</span></h3>
+  <div class="tags"><span class="tag comfy">ComfyUI</span><span class="tag rust">Rust core</span><span class="tag ai">AI Agent</span></div>
+  <p data-en>Simplify the artwork into flat color blocks matching the thread palette: reduce colors to the
+  machine's practical limit, flatten gradients, remove noise. <b>This is where our img2img stylization
+  lives</b> — an AI "stylize to flat color blocks" pass, followed by hard color quantization
+  (Lab KMeans in Rust) that locks every pixel to a thread color.</p>
+  <p data-cn>把图稿整理成与绣线色板对应的平涂色块：减色到机器实用上限、压平渐变、去噪。
+  <b>我们的图生图风格化就在这一步</b>——AI"平涂色块化"先行，再由 Rust 的 Lab KMeans 硬量化把每个像素锁定到绣线色。</p>
+  <div class="io" data-en><b>In:</b> raw image → <b>Out:</b> flat-color artwork + thread palette</div>
+  <div class="io" data-cn><b>输入：</b>原图 → <b>产出：</b>平涂色块图稿 + 绣线色板</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>3 · Object / Region Segmentation <span style="color:var(--muted)">/ 对象与区域划分</span></h3>
+  <h3 data-cn>3 · 对象与区域划分 <span style="color:var(--muted)">/ Object Segmentation</span></h3>
+  <div class="tags"><span class="tag rust">Rust core</span><span class="tag ai">AI Agent</span><span class="tag ui">UI</span></div>
+  <p data-en>Split color blocks into stitchable objects (regions) with clean boundaries. A digitizer thinks
+  in objects, not pixels: each object gets its own stitch type, direction and density.</p>
+  <p data-cn>把色块进一步拆成边界干净的可绣对象（区域）。制版师的思维单位是对象而非像素：
+  每个对象拥有自己的针法、方向和密度。</p>
+  <div class="io" data-en><b>In:</b> flat artwork → <b>Out:</b> region list (mask, bbox, area)</div>
+  <div class="io" data-cn><b>输入：</b>平涂图稿 → <b>产出：</b>区域列表（掩码、包围盒、面积）</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>4 · Stitch Type Assignment <span style="color:var(--muted)">/ 针法分配</span></h3>
+  <h3 data-cn>4 · 针法分配 <span style="color:var(--muted)">/ Stitch Type Assignment</span></h3>
+  <div class="tags"><span class="tag ai">AI Agent</span><span class="tag ui">UI</span></div>
+  <p data-en>The core craft decision per object: <span class="tag stitch-satin">SATIN 缎面针</span> for narrow
+  columns/borders/lettering, <span class="tag stitch-tatami">TATAMI / FILL 榻榻米(填针)</span> for large areas,
+  <span class="tag stitch-run">RUN 平针</span> for outlines/fine lines, plus special techniques
+  <span class="tag stitch-special">APPLIQUÉ 贴布绣 · 3D PUFF 立体绣 · SEQUIN 珠片绣</span>.</p>
+  <p data-cn>对每个对象做核心工艺决策：<span class="tag stitch-satin">缎面针 SATIN</span> 用于细长条/边框/文字，
+  <span class="tag stitch-tatami">榻榻米（填针）TATAMI</span> 用于大面积，
+  <span class="tag stitch-run">平针 RUN</span> 用于轮廓/细线，特殊工艺
+  <span class="tag stitch-special">贴布绣 · 立体绣 · 珠片绣</span>。</p>
+  <div class="io" data-en><b>In:</b> regions → <b>Out:</b> stitch type per region</div>
+  <div class="io" data-cn><b>输入：</b>区域列表 → <b>产出：</b>每区域针法</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>5 · Density, Underlay &amp; Compensation <span style="color:var(--muted)">/ 密度、打底与补偿</span></h3>
+  <h3 data-cn>5 · 密度、打底与补偿 <span style="color:var(--muted)">/ Density, Underlay &amp; Compensation</span></h3>
+  <div class="tags"><span class="tag ai">AI Agent</span><span class="tag rust">Rust core</span></div>
+  <p data-en>Per-object parameters: stitch density (mm spacing), stitch length, <b>underlay</b> (打底针 —
+  edge-walk / zigzag / tatami underlay that stabilizes fabric), <b>pull compensation</b> (拉伸补偿 —
+  over-sizing to counter fabric gathering), and push-pull handling. Wrong values cause puckering (起皱)
+  or gaps (露底).</p>
+  <p data-cn>逐对象参数：针迹密度（毫米针距）、针长、<b>打底针</b>（边缘走针/锯齿/榻榻米打底，稳定面料）、
+  <b>拉伸补偿</b>（放大轮廓以抵消面料收缩）与推拉变形处理。参数错误会导致起皱或露底。</p>
+  <div class="io" data-en><b>In:</b> typed regions + fabric → <b>Out:</b> parameterized objects</div>
+  <div class="io" data-cn><b>输入：</b>带针法的区域 + 面料 → <b>产出：</b>参数化对象</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>6 · Pathing &amp; Sequencing <span style="color:var(--muted)">/ 走针顺序与路径规划</span></h3>
+  <h3 data-cn>6 · 走针顺序与路径规划 <span style="color:var(--muted)">/ Pathing &amp; Sequencing</span></h3>
+  <div class="tags"><span class="tag rust">Rust core</span><span class="tag ai">AI Agent</span></div>
+  <p data-en>Order objects to minimize jump stitches (跳针), trims (剪线) and color changes (换色);
+  stitch background-to-foreground, center-out, bottom-up. Registration (对位/套准) between colors
+  depends on pathing quality. This is the highest-skill step — and the best optimization target for our Rust core.</p>
+  <p data-cn>规划对象顺序以最小化跳针、剪线和换色次数；先背景后前景、由内向外、自下而上。
+  多色对位（套准）质量取决于路径规划。这是制版师技术含量最高的一步，也是 Rust 核心的最佳优化目标。</p>
+  <div class="io" data-en><b>In:</b> parameterized objects → <b>Out:</b> ordered stitch sequence</div>
+  <div class="io" data-cn><b>输入：</b>参数化对象 → <b>产出：</b>有序针迹序列</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>7 · Simulation Preview &amp; Local Editing <span style="color:var(--muted)">/ 仿真预览与局部修改</span></h3>
+  <h3 data-cn>7 · 仿真预览与局部修改 <span style="color:var(--muted)">/ Simulation &amp; Local Editing</span></h3>
+  <div class="tags"><span class="tag ui">UI</span><span class="tag comfy">ComfyUI</span><span class="tag rust">Rust core</span></div>
+  <p data-en>Preview the stitch-out (TrueView / 针迹仿真), then iterate locally: select a region and
+  repaint it (inpaint 局部重绘), adjust a color, fix a letter. Every edit re-runs only the affected pipeline slice.</p>
+  <p data-cn>预览绣出效果（针迹仿真），然后局部迭代：选区重绘（inpaint）、改色、修字。
+  每次修改只重跑受影响的流水线切片。</p>
+  <div class="io" data-en><b>In:</b> stitch sequence → <b>Out:</b> revised artwork/params</div>
+  <div class="io" data-cn><b>输入：</b>针迹序列 → <b>产出：</b>修订后的图稿/参数</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>8 · Machine File Export + Worksheet <span style="color:var(--muted)">/ 机器文件导出 + 生产单</span></h3>
+  <h3 data-cn>8 · 机器文件导出 + 生产单 <span style="color:var(--muted)">/ Export + Worksheet</span></h3>
+  <div class="tags"><span class="tag rust">Rust core</span><span class="tag ui">UI</span></div>
+  <p data-en>Write machine formats (DST/PES/JEF/EXP/…), plus the production worksheet (生产单/工艺单):
+  thread color chart with brand codes (Madeira/Gunold/…), color change order, stitch count, size,
+  hoop and stabilizer notes.</p>
+  <p data-cn>写出机器格式（DST/PES/JEF/EXP…），并附生产单（工艺单）：绣线色卡（含品牌色号）、
+  换色顺序、针数、尺寸、绣框与底衬说明。</p>
+  <div class="io" data-en><b>In:</b> final sequence → <b>Out:</b> design.dst + worksheet.pdf</div>
+  <div class="io" data-cn><b>输入：</b>最终序列 → <b>产出：</b>design.dst + 生产单</div>
+</div>
+
+<div class="stage">
+  <h3 data-en>9 · Test Sew-out &amp; Revision <span style="color:var(--muted)">/ 试绣打样与改版</span></h3>
+  <h3 data-cn>9 · 试绣打样与改版 <span style="color:var(--muted)">/ Test Sew-out &amp; Revision</span></h3>
+  <div class="tags"><span class="tag manual">Manual/Factory</span><span class="tag ai">AI Agent</span></div>
+  <p data-en>Run a physical sample (试绣/打样), inspect puckering, coverage, registration, then revise
+  (改版) density/pathing. The machine-run verdict (success/failed + reason) feeds our data flywheel as
+  ground truth for the digitizing policy.</p>
+  <p data-cn>上机试绣打样，检查起皱、覆盖度、对位，然后改版调整密度/路径。
+  上机结果（成功/失败+原因）作为 ground truth 回流数据飞轮，用于制版策略学习。</p>
+  <div class="io" data-en><b>In:</b> machine file → <b>Out:</b> verdict + revised file</div>
+  <div class="io" data-cn><b>输入：</b>机器文件 → <b>产出：</b>结论 + 修订文件</div>
+</div>
+
+<!-- ==================== GLOSSARY ==================== -->
+<h2 data-en><span class="num">02</span>Terminology Glossary (术语对照表)</h2>
+<h2 data-cn><span class="num">02</span>术语对照表（Terminology Glossary）</h2>
+
+<h3 data-en style="font-size:15px;margin:20px 0 4px">People &amp; Process / 人与流程</h3>
+<h3 data-cn style="font-size:15px;margin:20px 0 4px">人与流程 / People &amp; Process</h3>
+<table>
+<tr><th>EN</th><th>中文</th><th data-en>Notes</th><th data-cn>说明</th></tr>
+<tr><td class="en">Digitizing / Punching</td><td class="cn">制版 / 打版 / 打带</td>
+  <td data-en>Converting artwork into stitch data. "Punching" survives from the punched-tape era (打孔纸带).</td>
+  <td data-cn>把图稿转成针迹数据。"打带"源自打孔纸带时代。</td></tr>
+<tr><td class="en">Digitizer / Puncher</td><td class="cn">制版师 / 打版师</td>
+  <td data-en>The craftsperson. Our Agent replaces this role's decision work.</td>
+  <td data-cn>手艺人。我们的 Agent 替代的正是其决策工作。</td></tr>
+<tr><td class="en">Design / Pattern file</td><td class="cn">花版 / 绣花文件</td>
+  <td data-en>Machine-ready stitch file (DST/PES/…).</td><td data-cn>机器可读的针迹文件（DST/PES/…）。</td></tr>
+<tr><td class="en">Sew-out / Test sew</td><td class="cn">试绣 / 打样</td>
+  <td data-en>Physical sample run for approval.</td><td data-cn>上机打样供确认。</td></tr>
+<tr><td class="en">Revision</td><td class="cn">改版</td>
+  <td data-en>Adjusting the pattern after a test sew.</td><td data-cn>试绣后调整花版。</td></tr>
+<tr><td class="en">Worksheet / Production sheet</td><td class="cn">生产单 / 工艺单</td>
+  <td data-en>Thread colors, change order, stitch count, hoop notes for the factory.</td>
+  <td data-cn>给工厂的文件：线色、换色顺序、针数、绣框说明。</td></tr>
+</table>
+
+<h3 data-en style="font-size:15px;margin:24px 0 4px">Stitch Types / 针法</h3>
+<h3 data-cn style="font-size:15px;margin:24px 0 4px">针法 / Stitch Types</h3>
+<table>
+<tr><th>EN</th><th>中文</th><th data-en>Use</th><th data-cn>用途</th></tr>
+<tr><td class="en">Satin stitch</td><td class="cn">缎面针 / 缎纹针</td>
+  <td data-en>Narrow columns, borders, lettering. Zigzag across the column.</td>
+  <td data-cn>细长条、边框、文字。横跨条带的锯齿针。</td></tr>
+<tr><td class="en">Tatami / Fill stitch</td><td class="cn">榻榻米 / 填针</td>
+  <td data-en>Large areas; rows of running stitches in a weave pattern.</td>
+  <td data-cn>大面积填充；按编织纹理排列的平针行。</td></tr>
+<tr><td class="en">Run(ning) stitch</td><td class="cn">平针 / 直线针 / 走针</td>
+  <td data-en>Outlines, fine lines, travel between objects.</td>
+  <td data-cn>轮廓、细线、对象间走线。</td></tr>
+<tr><td class="en">Bean / Triple run</td><td class="cn">三针平针 / 加强平针</td>
+  <td data-en>Back-and-forth run for bolder lines.</td><td data-cn>来回走针加粗线条。</td></tr>
+<tr><td class="en">Backstitch / Stem stitch</td><td class="cn">轮廓针 / 茎绣针</td>
+  <td data-en>Hand-look outlines and stems.</td><td data-cn>手绣感轮廓与枝干。</td></tr>
+<tr><td class="en">Underlay</td><td class="cn">打底针 / 下缝</td>
+  <td data-en>Foundation stitches under satin/tatami: edge-walk, zigzag, tatami underlay.</td>
+  <td data-cn>缎面/填针下的基础针：边缘走针、锯齿打底、榻榻米打底。</td></tr>
+<tr><td class="en">Appliqué</td><td class="cn">贴布绣</td>
+  <td data-en>Fabric patch stitched down; placement/tack-down/finish lines.</td>
+  <td data-cn>缝贴布块：定位线/压布针/完成线三步。</td></tr>
+<tr><td class="en">3D Puff</td><td class="cn">立体绣</td>
+  <td data-en>Foam under dense satin for raised effect (caps).</td>
+  <td data-cn>泡沫衬垫 + 高密缎面，帽绣常见。</td></tr>
+<tr><td class="en">Sequin / Chenille</td><td class="cn">珠片绣 / 毛巾绣</td>
+  <td data-en>Special machine heads; sequin devices, loop chenille.</td>
+  <td data-cn>特种机头：珠片装置、毛巾绣线圈。</td></tr>
+</table>
+
+<h3 data-en style="font-size:15px;margin:24px 0 4px">Parameters &amp; Defects / 参数与疵病</h3>
+<h3 data-cn style="font-size:15px;margin:24px 0 4px">参数与疵病 / Parameters &amp; Defects</h3>
+<table>
+<tr><th>EN</th><th>中文</th><th data-en>Notes</th><th data-cn>说明</th></tr>
+<tr><td class="en">Stitch density</td><td class="cn">针迹密度</td>
+  <td data-en>Spacing between stitch rows (mm); typical satin 0.35–0.45mm, tatami 0.4–0.5mm.</td>
+  <td data-cn>针迹行距（毫米）；缎面常用 0.35–0.45mm，榻榻米 0.4–0.5mm。</td></tr>
+<tr><td class="en">Stitch length</td><td class="cn">针距 / 针长</td>
+  <td data-en>Length of a single stitch; max ~12.1mm in DST.</td>
+  <td data-cn>单针长度；DST 上限约 12.1mm。</td></tr>
+<tr><td class="en">Pull compensation</td><td class="cn">拉伸补偿</td>
+  <td data-en>Over-size objects to counter fabric pull-in.</td>
+  <td data-cn>放大对象以抵消面料收缩。</td></tr>
+<tr><td class="en">Push-pull distortion</td><td class="cn">推拉变形</td>
+  <td data-en>Stitches push fabric along stitch direction, pull across it.</td>
+  <td data-cn">针迹沿走向推布、垂直方向拉布造成变形。</td></tr>
+<tr><td class="en">Jump stitch / Trim</td><td class="cn">跳针 / 剪线</td>
+  <td data-en>Travel moves; long jumps auto-trim. Minimize both.</td>
+  <td data-cn>空走针；长跳针自动剪线。两者都应最小化。</td></tr>
+<tr><td class="en">Color change</td><td class="cn">换色</td>
+  <td data-en>Thread swap command; ordering defines the worksheet.</td>
+  <td data-cn>换线指令；其顺序即生产单换色表。</td></tr>
+<tr><td class="en">Registration</td><td class="cn">对位 / 套准</td>
+  <td data-en>Alignment between colors; poor pathing breaks it.</td>
+  <td data-cn>多色间的对齐；路径差会错位。</td></tr>
+<tr><td class="en">Puckering</td><td class="cn">起皱</td>
+  <td data-en>Fabric gathering from over-density or no underlay.</td>
+  <td data-cn">密度过大或缺打底导致面料起皱。</td></tr>
+<tr><td class="en">Stitch count</td><td class="cn">针数</td>
+  <td data-en>Total stitches; drives machine time &amp; price.</td>
+  <td data-cn>总针数；决定工时与报价。</td></tr>
+</table>
+
+<h3 data-en style="font-size:15px;margin:24px 0 4px">Materials &amp; Machine / 材料与机器</h3>
+<h3 data-cn style="font-size:15px;margin:24px 0 4px">材料与机器 / Materials &amp; Machine</h3>
+<table>
+<tr><th>EN</th><th>中文</th><th data-en>Notes</th><th data-cn>说明</th></tr>
+<tr><td class="en">Thread (rayon/polyester)</td><td class="cn">绣线（人造丝/涤纶）</td>
+  <td data-en>Brand color charts: Madeira, Gunold (高士? no — Gunold 固诺德), Isacord.</td>
+  <td data-cn>品牌色卡：Madeira、Gunold、Isacord。</td></tr>
+<tr><td class="en">Bobbin thread</td><td class="cn">底线</td>
+  <td data-en>Underside thread; 1/3 rule for satin coverage.</td>
+  <td data-cn>背面线；缎面绣背面"三分之一"露线规则。</td></tr>
+<tr><td class="en">Stabilizer / Backing</td><td class="cn">底衬 / 衬纸</td>
+  <td data-en>Cutaway / tearaway / water-soluble; chosen by fabric.</td>
+  <td data-cn>剪切衬/撕除衬/水溶衬；按面料选择。</td></tr>
+<tr><td class="en">Hoop / Frame</td><td class="cn">绣框 / 绷框</td>
+  <td data-en>Holds fabric; defines max design area.</td>
+  <td data-cn>固定面料；决定最大花型范围。</td></tr>
+<tr><td class="en">Needle</td><td class="cn">机针</td>
+  <td data-en>Size/point per fabric (ballpoint for knits).</td>
+  <td data-cn">按面料选号与针尖（针织用圆头针）。</td></tr>
+<tr><td class="en">DST / PES / JEF / EXP</td><td class="cn">机器格式</td>
+  <td data-en>Tajima DST = industry interchange; PES=Brother, JEF=Janome, EXP=Melco.</td>
+  <td data-cn>Tajima DST 为行业交换格式；PES=兄弟，JEF=真善美，EXP=Meko。</td></tr>
+</table>
+
+<!-- ==================== MAPPING ==================== -->
+<h2 data-en><span class="num">03</span>Mapping to open_emby (产品映射)</h2>
+<h2 data-cn><span class="num">03</span>产品映射（Mapping to open_emby）</h2>
+
+<p data-en>The UI follows the digitizer's workflow as a left-to-right pipeline; the flywheel stays
+invisible in the backend. Editor stages:</p>
+<p data-cn>UI 按制版师工作流组织为从左到右的流水线；数据飞轮只留在后端，不进 UI。编辑器阶段：</p>
+
+<table>
+<tr><th data-en>UI Stage</th><th data-cn>UI 阶段</th><th data-en>Backend owner</th><th data-cn>后端负责</th><th data-en>State</th><th data-cn>状态</th></tr>
+<tr><td>1 Import 导入</td><td class="cn">导入图稿</td><td>Electron dialog + fs</td><td class="cn">对话框 + 文件系统</td><td>✅ done</td><td class="cn">✅ 已实现</td></tr>
+<tr><td>2 Stylize / Color-block 风格化色块分离</td><td class="cn">风格化色块分离</td><td>ComfyUI img2img + Rust quantize</td><td class="cn">ComfyUI 图生图 + Rust 量化</td><td>🚧 MVP</td><td class="cn">🚧 MVP</td></tr>
+<tr><td>3 Segment 区域划分</td><td class="cn">区域划分</td><td>Rust connected-components</td><td class="cn">Rust 连通域</td><td>✅ basic</td><td class="cn">✅ 基础版</td></tr>
+<tr><td>4 Stitch plan 制版方案</td><td class="cn">制版方案</td><td>Agent rules → params</td><td class="cn">Agent 规则→参数</td><td>✅ basic</td><td class="cn">✅ 基础版</td></tr>
+<tr><td>5 Simulate 仿真预览</td><td class="cn">仿真预览</td><td>Canvas render (renderer)</td><td class="cn">渲染端 Canvas</td><td>⬜ next</td><td class="cn">⬜ 下一步</td></tr>
+<tr><td>6 Local edit 局部修改</td><td class="cn">局部修改</td><td>ComfyUI inpaint</td><td class="cn">ComfyUI 局部重绘</td><td>⬜ next</td><td class="cn">⬜ 下一步</td></tr>
+<tr><td>7 Export 导出+生产单</td><td class="cn">导出+生产单</td><td>Rust DST codec + PDF</td><td class="cn">Rust 编码 + 生产单</td><td>🚧 DST done</td><td class="cn">🚧 DST 已完成</td></tr>
+</table>
+
+<div class="note" data-en><b>Design rule:</b> everything about training data, the flywheel, consent and
+curation lives in the backend only. The UI speaks the digitizer's language: artwork → color blocks →
+stitch plan → preview → machine file.</div>
+<div class="note" data-cn><b>设计原则：</b>训练数据、飞轮、授权与策展全部只在后端。
+UI 只说制版师的语言：图稿 → 色块 → 制版方案 → 预览 → 机器文件。</div>
+
+</div>
+<script>
+function setLang(l){
+  document.body.classList.toggle('lang-cn', l==='cn');
+  document.getElementById('btn-en').classList.toggle('on', l==='en');
+  document.getElementById('btn-cn').classList.toggle('on', l==='cn');
+  document.documentElement.lang = l==='cn' ? 'zh-CN' : 'en';
+}
+</script>
+</body>
+</html>

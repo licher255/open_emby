@@ -1,34 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useEnvStore } from '../stores/env'
-import type { AppSettings, ModelInfo, PluginManifest } from '@shared/types'
+import type { ModelInfo, PluginManifest } from '@shared/types'
 
 export default function Dashboard() {
   const { status, refresh } = useEnvStore()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [plugins, setPlugins] = useState<PluginManifest[]>([])
-  const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [flyStats, setFlyStats] = useState<Record<string, unknown> | null>(null)
-
-  const loadFlyStats = () => window.openEmby.flywheel.stats().then(setFlyStats).catch(() => {})
 
   useEffect(() => {
     refresh()
     window.openEmby.models.list().then(setModels).catch(() => {})
     window.openEmby.plugins.list().then(setPlugins).catch(() => {})
-    window.openEmby.settings.get().then(setSettings).catch(() => {})
-    loadFlyStats()
   }, [refresh])
-
-  const toggleContribution = async (enabled: boolean) => {
-    const s = await window.openEmby.settings.set({
-      contribution: {
-        ...(settings?.contribution ?? { contributorId: '' }),
-        enabled,
-        scope: enabled ? 'anonymous_training' : 'off'
-      }
-    })
-    setSettings(s)
-  }
 
   return (
     <div>
@@ -67,40 +50,6 @@ export default function Dashboard() {
             {models.length === 0 && <tr><td colSpan={3}>models/ 目录暂无模型，从 HuggingFace 下载后自动列出</td></tr>}
           </tbody>
         </table>
-      </div>
-
-      <div className="card">
-        <h2>数据飞轮（社区共建）</h2>
-        <p>
-          授权后，你的「原图 + 制版结果 + 使用反馈」将匿名用于训练更好的刺绣模型。
-          数据存放在本机 <code>datasets/flywheel/</code>，可随时关闭或删除。
-        </p>
-        <p>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings?.contribution.enabled ?? false}
-              onChange={(e) => toggleContribution(e.target.checked)}
-            />{' '}
-            参与匿名训练数据贡献
-          </label>
-          {settings?.contribution.contributorId && (
-            <span style={{ marginLeft: 12, color: '#8a91a0', fontSize: 12 }}>
-              匿名 ID: {settings.contribution.contributorId.slice(0, 8)}…
-            </span>
-          )}
-        </p>
-        {flyStats && (
-          <p style={{ fontSize: 13, color: '#aeb4c0' }}>
-            训练池：待策展 {(flyStats.pools as Record<string, number>)?.inbox ?? 0} ·
-            已入选 {(flyStats.pools as Record<string, number>)?.curated ?? 0} ·
-            已淘汰 {(flyStats.pools as Record<string, number>)?.rejected ?? 0}
-            {'  '}
-            <button onClick={async () => { await window.openEmby.flywheel.curate(); loadFlyStats() }}>
-              运行策展
-            </button>
-          </p>
-        )}
       </div>
 
       <div className="card">

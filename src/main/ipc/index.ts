@@ -1,11 +1,11 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
-import { basename, join } from 'path'
+import { basename, extname, join } from 'path'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, DigitizePlan, ExportRequest } from '@shared/types'
 import { getSettings, setSettings } from '../services/settings'
-import { comfyStatus, submitWorkflow } from '../services/comfyui'
+import { comfyStatus, submitWorkflow, stylizeImage } from '../services/comfyui'
 import { sidecarStatus, sidecarCall, startSidecar } from '../services/sidecar'
 import { listModels } from '../services/modelManager'
 import { listPlugins, invokePlugin } from '../services/pluginHost'
@@ -21,6 +21,37 @@ export function registerIpc(): void {
 
   ipcMain.handle(IpcChannels.comfyStatus, () => comfyStatus())
   ipcMain.handle(IpcChannels.comfySubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
+
+  // 风格化（制版第一步：平涂色块化），进度推送 comfyProgress
+  ipcMain.handle(IpcChannels.comfyStylize, async (e, args: { imagePath: string; maxColors?: number; denoise?: number }) => {
+    const win = e.sender
+    const s = getSettings()
+    const send = (msg: string) => { if (!win.isDestroyed()) win.send(IpcChannels.comfyProgress, msg) }
+    return stylizeImage(args.imagePath, {
+      checkpoint: s.comfyCheckpoint,
+      denoise: args.denoise,
+      maxColors: args.maxColors
+    }, send)
+  })
+
+  // 图片选择对话框（任意常见格式）
+  ipcMain.handle(IpcChannels.selectImage, async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const r = await dialog.showOpenDialog(win!, {
+      title: '选择图稿图片',
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tif', 'tiff', 'avif'] }]
+    })
+    if (r.canceled || r.filePaths.length === 0) return null
+    return r.filePaths[0]
+  })
+
+  // 本地图片 -> data URL（绕过 renderer CSP 对 file:// 的限制）
+  ipcMain.handle(IpcChannels.readImageDataUrl, (_e, path: string) => {
+    const buf = readFileSync(path)
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp', '.avif': 'image/avif', '.tif': 'image/tiff', '.tiff': 'image/tiff' }[extname(path).toLowerCase()] ?? 'application/octet-stream'
+    return `data:${mime};base64,${buf.toString('base64')}`
+  })
 
   ipcMain.handle(IpcChannels.sidecarStatus, () => sidecarStatus())
   ipcMain.handle(IpcChannels.sidecarDigitizePlan, (_e, args: { imagePath: string; intent: string }) =>
