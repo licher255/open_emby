@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+*.log
+sidecar/node_modules/
+crates/**/target/
+crates/**/node_modules/
+crates/**/*.node
+crates/**/index.js
+crates/**/index.d.ts
+.DS_Store

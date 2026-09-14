@@ -1,0 +1,13 @@
+{
+  "id": "embroider-style-workflow",
+  "name": "刺绣风格化工作流（示例）",
+  "version": "0.1.0",
+  "description": "ComfyUI 图生图工作流模板：照片 -> 刺绣质感效果图",
+  "author": "open_emby",
+  "type": "workflow",
+  "entry": "workflow.json",
+  "permissions": ["comfyui"],
+  "contributes": {
+    "menus": [{ "id": "style.embroider", "label": "生成刺绣效果图" }]
+  }
+}

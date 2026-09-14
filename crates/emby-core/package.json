@@ -1,0 +1,16 @@
+{
+  "name": "emby-core",
+  "version": "0.1.0",
+  "description": "open_emby native core (Rust/napi-rs)",
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "napi": {
+    "binaryName": "emby-core"
+  },
+  "scripts": {
+    "build": "napi build --release --platform",
+    "build:debug": "napi build --platform"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}

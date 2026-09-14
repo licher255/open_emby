@@ -1,0 +1,15 @@
+{
+  "_comment": "ComfyUI API 格式工作流占位：img2img + LoRA（embroidery 风格）。节点 id 与模型名按本机 ComfyUI 实际安装调整。",
+  "3": {
+    "class_type": "KSampler",
+    "inputs": { "seed": 0, "steps": 20, "cfg": 7.0, "sampler_name": "euler", "scheduler": "normal", "denoise": 0.6, "model": ["10", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0] }
+  },
+  "5": { "class_type": "VAEEncode", "inputs": { "pixels": ["11", 0], "vae": ["4", 2] } },
+  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "embroidery, stitched thread texture, high detail", "clip": ["10", 1] } },
+  "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "blurry, low quality", "clip": ["10", 1] } },
+  "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "sd15.safetensors" } },
+  "10": { "class_type": "LoraLoader", "inputs": { "lora_name": "embroidery_style.safetensors", "strength_model": 0.8, "strength_clip": 0.8, "model": ["4", 0], "clip": ["4", 1] } },
+  "11": { "class_type": "LoadImage", "inputs": { "image": "input.png" } },
+  "8": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 2] } },
+  "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "open_emby", "images": ["8", 0] } }
+}
