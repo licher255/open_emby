@@ -49,4 +49,14 @@
 
   /* the single shadow tier */
   --shadow-float: rgba(17,17,24,0.04) 0 0 0 1px, rgba(17,17,24,0.06) 0 2px 6px, rgba(17,17,24,0.10) 0 6px 12px;
+
+  /* ---- 新拟物 (Neumorphism) ---- */
+  --neu-bg: #e6eaf0;            /* 软灰底：新拟物不能用纯白，凹凸需要灰阶余地 */
+  --neu-dark: #c3c9d4;          /* 暗侧投影 */
+  --neu-light: #ffffff;         /* 亮侧投影 */
+  --neu-out: 7px 7px 14px var(--neu-dark), -7px -7px 14px var(--neu-light);
+  --neu-out-sm: 4px 4px 8px var(--neu-dark), -4px -4px 8px var(--neu-light);
+  --neu-in: inset 5px 5px 10px var(--neu-dark), inset -5px -5px 10px var(--neu-light);
+  --neu-in-sm: inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light);
+  --neu-flat: 0 0 0 var(--neu-dark), 0 0 0 var(--neu-light); /* hover 过渡中间态 */
 }
