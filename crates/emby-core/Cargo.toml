@@ -1,0 +1,17 @@
+[package]
+name = "emby-core"
+version = "0.1.0"
+edition = "2021"
+description = "open_emby native core: image analysis, DST codec, phash (performance-critical compute)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", features = ["napi6"] }
+napi-derive = "3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+rand = "0.9"
+
+[build-dependencies]
+napi-build = "2"

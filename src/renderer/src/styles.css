@@ -1,0 +1,85 @@
+@import './design-tokens.css';
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 15px; line-height: 1.5;
+  background: var(--canvas); color: var(--ink);
+}
+code { font-family: var(--font-mono); font-size: 0.92em; }
+
+.app { display: flex; height: 100vh; }
+
+/* ---- sidebar ---- */
+nav {
+  width: 212px; padding: var(--sp-base) var(--sp-xs);
+  background: var(--canvas); border-right: 1px solid var(--hairline);
+  display: flex; flex-direction: column; gap: var(--sp-xxs);
+}
+nav .logo {
+  font-family: var(--font-disp); font-weight: 500; font-size: 20px;
+  letter-spacing: -0.2px; padding: var(--sp-xs) var(--sp-sm) var(--sp-md);
+}
+nav .logo em { color: var(--primary); font-style: normal; }
+nav button {
+  background: none; border: none; cursor: pointer; text-align: left;
+  font-family: var(--font-text); font-size: 15px; font-weight: 600;
+  color: var(--muted); padding: 10px 12px; border-radius: var(--r-sm);
+}
+nav button:hover { background: var(--surface-soft); color: var(--ink); }
+nav button.active { background: var(--primary-tint); color: var(--primary-deep); }
+
+main { flex: 1; padding: var(--sp-lg); overflow: auto; background: var(--surface-soft); }
+
+/* ---- type ---- */
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.26px; line-height: 1.15; margin: 0 0 var(--sp-md); }
+h2 { font-size: 16px; font-weight: 600; margin: 0 0 var(--sp-sm); color: var(--ink); }
+p { margin: var(--sp-xs) 0; color: var(--body); }
+
+/* ---- cards / panels ---- */
+.card {
+  background: var(--canvas); border: 1px solid var(--hairline);
+  border-radius: var(--r-lg); padding: var(--sp-md); margin-bottom: var(--sp-base);
+}
+.card:hover { box-shadow: var(--shadow-float); }
+
+/* ---- status dots ---- */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.24px;
+  padding: 3px 10px; border-radius: var(--r-full); margin-right: var(--sp-xs);
+}
+.badge.ok  { background: var(--thread-green); color: #fff; }
+.badge.err { background: var(--thread-red); color: #fff; }
+
+/* ---- buttons ---- */
+button.btn-primary {
+  background: var(--primary); color: var(--on-primary); border: none;
+  font-family: var(--font-text); font-size: 13px; font-weight: 600;
+  height: 32px; padding: 0 16px; border-radius: var(--r-sm); cursor: pointer;
+}
+button.btn-primary:hover { background: var(--primary-hover); }
+button.btn-primary:active { background: var(--primary-active); }
+.card button:not(.nav) {
+  background: var(--canvas); color: var(--ink);
+  border: 1px solid var(--ink); border-radius: var(--r-sm);
+  font-size: 13px; font-weight: 600; padding: 5px 14px; cursor: pointer;
+}
+.card button:hover { background: var(--surface-soft); }
+
+/* ---- consent toggle ---- */
+input[type='checkbox'] { accent-color: var(--thread-green); width: 16px; height: 16px; }
+
+/* ---- tables ---- */
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.24px; color: var(--muted);
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline);
+}
+td { padding: 8px 10px; border-bottom: 1px solid var(--hairline-soft); color: var(--body); }
+tbody tr:hover { background: var(--primary-tint); }
+td:first-child { color: var(--ink); font-weight: 500; }
+td:last-child { font-family: var(--font-mono); font-size: 13px; }

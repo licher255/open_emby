@@ -1,0 +1,51 @@
+﻿{
+    "imagePath":  "E:\\Project-刺绣机\\open_emby\\sidecar\\test_input.png",
+    "maxColors":  6,
+    "palette":  [
+                    "#0078dc",
+                    "#00b400",
+                    "#6e5a00",
+                    "#dc0000",
+                    "#ee8080",
+                    "#ffffff"
+                ],
+    "regions":  [
+                    {
+                        "id":  "r0",
+                        "color":  "#ffffff",
+                        "stitchType":  "tatami",
+                        "density":  0.4,
+                        "angleDeg":  0
+                    },
+                    {
+                        "id":  "r1",
+                        "color":  "#00b400",
+                        "stitchType":  "tatami",
+                        "density":  0.4,
+                        "angleDeg":  0
+                    },
+                    {
+                        "id":  "r2",
+                        "color":  "#dc0000",
+                        "stitchType":  "tatami",
+                        "density":  0.4,
+                        "angleDeg":  0
+                    },
+                    {
+                        "id":  "r3",
+                        "color":  "#0078dc",
+                        "stitchType":  "tatami",
+                        "density":  0.4,
+                        "angleDeg":  0
+                    }
+                ],
+    "sizeMm":  {
+                   "width":  100,
+                   "height":  100
+               },
+    "notes":  [
+                  "量化到 6 色（上限 6）",
+                  "默认针法策略: 大面积→tatami, 细长区→satin, 轮廓→run",
+                  "用户意图: 卡通风格（LLM 理解模块待接入）"
+              ]
+}
