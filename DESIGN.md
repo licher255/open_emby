@@ -1,5 +1,5 @@
 ---
-version: alpha
+version: alpha.2
 name: open-emby-design
 description: A playful-but-precise creative-tool studio anchored on a clean white canvas and Emby Blue (#2727e6), the single brand voltage that carries every primary CTA, the generate action, and the active tool state — learned from SuperHi's edtech language where learning software must feel like a toy but work like an instrument. Type runs a grotesque pair (Neue Haas Grotesk Display/Text, open substitute Inter) at confident sizes, with IBM Plex Mono carrying every technical readout — stitch counts, millimeter dimensions, color hex — because embroidery data should look like what it is: machine code made beautiful. A rotating "thread palette" of saturated accents (yellow #ffda00, green #16ab59, orange #ff7715, pink #ffbac4, warm-blue #91d8ec) codes stitch types and status, echoing the physical thread rack of a real embroidery studio. Corners are generous (8px inputs, 16px cards, 24px panels, full pills) and elevation is capped at one shadow tier — depth comes from color-blocking and sticker-like floating badges, not from shadows.
 
@@ -579,6 +579,18 @@ open_emby 的设计语言学自 **SuperHi** —— 一个把"学写代码"做成
 - 检查器先于工具栏折叠（工具是手，检查器是眼 —— 手比眼后收）。
 - 导航 label 在 < 1100px 时隐去文字只留 icon。
 - 永不出现横向滚动条：面板内部用 mono 数值截断（`12,340 sts` → `12.3k`）。
+
+## Frameless & Neumorphism（alpha.2 修订）
+
+窗口为**无边框**（frame: false）：自绘标题栏（42px，整条可拖拽，右侧 min/max/close 控制钮，close hover 红）。关窗 = 退出全部进程（sidecar 进程树 taskkill /T /F，无后台驻留）。
+
+表面系统从 SuperHi 式 flat + hairline 修订为**新拟物（Neumorphism）**：
+- 基面改为软灰 `#e6eaf0`（--neu-bg）—— 新拟物的凹凸不能用纯白，需要灰阶余地。
+- 每个表面一对阴影：亮侧 `#ffffff`（左上）+ 暗侧 `#c3c9d4`（--neu-dark，右下）。
+- 三态：**凸起**（--neu-out：卡片/导航/按钮/色片）· **凹陷**（--neu-in：图片相框/上传槽/输入框/选中导航）· **平**（hover 过渡中间态）。
+- 交互语义：按钮按下 = 凸起转凹陷；选中导航项 = 凹陷；可"放入"的容器（dropzone、image frame）恒凹陷。
+- 色彩系统不变：Emby Blue 仍是唯一品牌电压，thread palette 仍做针法编码 —— 新拟物只改变表面，不改变色彩语义。
+- 单阴影层级原则保留：--neu-out / --neu-in 各两档（标准/sm），全系统无第三套投影。
 
 ## Known Gaps
 

@@ -32,8 +32,16 @@ export function startSidecar(onLog: (line: string) => void): void {
 }
 
 export function stopSidecar(): void {
-  proc?.kill()
+  if (!proc) return
+  const pid = proc.pid
   proc = null
+  if (!pid) return
+  if (process.platform === 'win32') {
+    // /T = 整棵进程树（node -> tsx -> 子进程），/F = 强制
+    try { spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' }) } catch { /* ignore */ }
+  } else {
+    try { process.kill(-pid, 'SIGKILL') } catch { /* ignore */ }
+  }
 }
 
 export async function sidecarStatus(): Promise<{ running: boolean; url: string }> {

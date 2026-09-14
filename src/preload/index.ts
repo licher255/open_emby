@@ -2,6 +2,19 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, ExportRequest } from '@shared/types'
 
+// 无边框窗口控制
+const windowControls = {
+  minimize: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-maximize'),
+  close: () => ipcRenderer.invoke('window:close'),
+  isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+  onMaximizedChanged: (cb: (maximized: boolean) => void) => {
+    const l = (_e: unknown, v: boolean) => cb(v)
+    ipcRenderer.on('window:maximized-changed', l)
+    return () => { ipcRenderer.removeListener('window:maximized-changed', l) }
+  }
+}
+
 /** 暴露给渲染进程的类型安全 API: window.openEmby */
 const api = {
   envStatus: () => ipcRenderer.invoke(IpcChannels.envStatus),
@@ -44,7 +57,8 @@ const api = {
   settings: {
     get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
     set: (patch: Partial<AppSettings>) => ipcRenderer.invoke(IpcChannels.settingsSet, patch)
-  }
+  },
+  window: windowControls
 }
 
 export type OpenEmbyApi = typeof api
