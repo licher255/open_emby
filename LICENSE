@@ -1,0 +1,88 @@
+# open_emby License (Personal, Non-Commercial Open Edition)
+
+Version: v1.0　Date: 2026-09-14
+Licensor: Licher (the "Licensor"; billing entity to be designated separately
+for commercial licensing)
+
+## Article 1 — Definitions
+
+1. **"Software"**: all source code, model weight files, and configurations
+published in this repository.
+2. **"Personal Use"**: use by any individual or organization for
+learning, research, evaluation, or other non-profit purposes, that
+generates no direct or indirect revenue and is not performed on
+behalf of any commercial entity.
+3. **"Commercial Use"**: includes, without limitation:
+(1) use of the Software in any product or service that generates revenue;
+(2) deployment of the Software on servers, APIs, or SaaS platforms
+accessible to third parties;
+(3) incorporation of the Software into commercial software, hardware,
+or solutions offered or delivered for sale;
+(4) use of the Software to provide consulting, implementation, or
+customization services to any commercial entity.
+4. **"On-Premises Deployment (OPC)"**: deployment of the Software as an
+operational service on any server, compute environment, or private
+cloud not operated by the Licensor.
+
+## Article 2 — Free Grant
+
+The Licensor hereby grants any individual or organization a free,
+non-exclusive, non-transferable license to:
+
+1. download, copy, and modify the Software;
+2. run, test, and evaluate the Software for Personal Use;
+3. cite and present results from the Software in academic papers and
+technical blogs (attribution required).
+
+## Article 3 — Commercial Use Restrictions
+
+**Any Commercial Use requires the Licensor's prior written permission
+and payment of a license fee.**
+Prior to obtaining such written permission, the licensee shall not:
+
+1. use the Software for any commercial purpose;
+2. perform any unauthorized On-Premises Deployment (OPC);
+3. deliver, transfer, or sublicense the Software or its Derivative Works
+to any third party for commercial purposes.
+
+## Article 4 — Commercial Licensing Process
+
+Commercial licenses are granted on a case-by-case basis. The licensee
+must contact the Licensor via:
+
+- Email: your@email.com
+
+The Licensor will evaluate and quote based on the use case (industry,
+deployment scale, call volume, term, etc.). The license takes effect
+upon both parties signing a written agreement.
+The Licensor reserves the right to refuse any commercial licensing
+request without stating a reason.
+
+## Article 5 — Derivative Works
+
+1. Derivative models produced by fine-tuning, distilling, or quantizing
+the Software's model weights, and derivative software based on the
+Software, are subject to Article 3 for Commercial Use;
+2. Derivative Works created for Personal Use must prominently state
+"Derived from open_emby" upon release.
+
+## Article 6 — Attribution and Trademarks
+
+This license grants no trademark rights. Without written permission,
+the Licensor's name, logos, or product name "open_emby" shall not be
+used in any product, service, or promotion.
+
+## Article 7 — Disclaimer and Termination
+
+1. The Software is provided "as is". The Licensor makes no warranties,
+express or implied, including but not limited to warranties of
+accuracy, merchantability, or non-infringement.
+2. The Licensor shall not be liable for any direct or indirect losses
+arising from use of the Software; the Licensor's aggregate liability
+(if any) shall not exceed the total fees actually paid by the
+licensee.
+3. Any breach of this Agreement automatically terminates the license;
+the licensee must immediately cease use and destroy all copies.
+4. This Agreement is governed by the laws of the People's Republic of
+China; disputes shall be under the jurisdiction of the court where
+the Licensor is located.
