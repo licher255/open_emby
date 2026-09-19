@@ -3,6 +3,7 @@ out/
 dist/
 *.log
 sidecar/node_modules/
+sidecar/dist/
 crates/**/target/
 crates/**/node_modules/
 crates/**/*.node

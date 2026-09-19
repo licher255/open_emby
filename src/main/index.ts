@@ -1,7 +1,6 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'path'
-import { registerIpc, bootServices } from './ipc'
-import { stopSidecar } from './services/sidecar'
+import { registerIpc, bootServices, shutdownServices } from './ipc'
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 
@@ -55,9 +54,9 @@ app.whenReady().then(() => {
   })
 })
 
-// 任何退出路径（关窗 / Cmd+Q / 任务栏退出）都先杀 sidecar 进程树
-app.on('before-quit', () => stopSidecar())
+// 任何退出路径（关窗 / Cmd+Q / 任务栏退出）都先杀 sidecar / engine 进程树
+app.on('before-quit', () => shutdownServices())
 app.on('window-all-closed', () => {
-  stopSidecar()
+  shutdownServices()
   app.quit() // 全平台一致：关窗即退出全部进程（不做 macOS 驻留）
 })

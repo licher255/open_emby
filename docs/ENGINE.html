@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>emby-engine — open_emby 原生生成引擎（Rust） | ComfyUI 架构借鉴</title>
+<style>
+  :root {
+    --primary:#2727e6; --primary-deep:#121297; --primary-tint:#dedefb;
+    --ink:#111118; --body:#58585d; --muted:#757579;
+    --canvas:#fff; --surface:#f6f6f6; --hairline:#d9d9d9;
+    --yellow:#ffda00; --green:#16ab59; --orange:#ff7715; --pink:#ffbac4; --warm-blue:#91d8ec;
+    --red:#ff4141;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Inter',-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;
+         background:var(--canvas); color:var(--ink); line-height:1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 32px 96px; }
+  header.top { border-bottom:1px solid var(--hairline); padding-bottom:24px; margin-bottom:40px; }
+  .crumb { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+           letter-spacing:.4px; color:var(--muted); margin-bottom:10px; }
+  h1 { font-size:30px; letter-spacing:-0.3px; margin:0; }
+  h1 em { color:var(--primary); font-style:normal; }
+  .subtitle { color:var(--body); font-size:16px; margin:10px 0 0; }
+  h2 { font-size:21px; margin:48px 0 8px; padding-top:24px; border-top:1px solid var(--hairline); }
+  h2 .num { font-family:'IBM Plex Mono',monospace; color:var(--primary); margin-right:10px; }
+  h3 { font-size:16px; margin:24px 0 6px; }
+  p, li { color:var(--body); font-size:15px; }
+  .lead { font-size:17px; color:var(--ink); }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin:16px 0; }
+  th { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+       letter-spacing:.4px; color:var(--muted); text-align:left; padding:8px 12px;
+       border-bottom:2px solid var(--ink); }
+  td { padding:8px 12px; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  td.mono, code { font-family:'IBM Plex Mono','Cascadia Mono',monospace; font-size:12.5px; }
+  code { background:var(--surface); border:1px solid var(--hairline); border-radius:6px; padding:1px 6px; }
+  td.k { font-weight:600; color:var(--ink); white-space:nowrap; }
+  pre { background:var(--ink); color:#e8e8ee; border-radius:12px; padding:16px 20px;
+        font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.55; overflow-x:auto; }
+  pre .c { color:#8a8a96; }
+  .note { background:var(--surface); border-radius:12px; padding:14px 18px; font-size:14px; margin:16px 0; }
+  .note b { color:var(--ink); }
+  .tags { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .tag { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:.4px;
+         text-transform:uppercase; padding:3px 10px; border-radius:9999px; }
+  .tag.rust { background:var(--ink); color:#fff; }
+  .tag.native { background:var(--green); color:#fff; }
+  .tag.stub { background:var(--yellow); color:var(--ink); }
+  .tag.comfy { background:var(--primary-tint); color:var(--primary-deep); }
+  .tag.ui { background:var(--pink); color:var(--ink); }
+  .tag.api { background:var(--warm-blue); color:var(--ink); }
+  ol.plan { counter-reset: step; list-style:none; padding-left:0; }
+  ol.plan li { counter-increment: step; margin:10px 0; padding-left:36px; position:relative; }
+  ol.plan li::before { content: counter(step); position:absolute; left:0; top:1px;
+    width:22px; height:22px; border-radius:50%; background:var(--primary); color:#fff;
+    font:600 12px/22px 'IBM Plex Mono',monospace; text-align:center; }
+  ol.plan li b { color:var(--ink); }
+  .pill-row { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  .pill { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500;
+          padding:6px 14px; border-radius:9999px; border:1px solid var(--hairline); color:var(--ink); }
+  .pill.on { background:var(--primary); border-color:var(--primary); color:#fff; }
+  footer { margin-top:64px; padding-top:16px; border-top:1px solid var(--hairline);
+           font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+           text-transform:uppercase; letter-spacing:.4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="crumb">open_emby / docs / ENGINE</div>
+  <h1>emby-engine <em>— 原生生成引擎（Rust）</em></h1>
+  <p class="subtitle">借鉴 ComfyUI 后端架构、用 Rust 重写的节点图执行引擎，替代「App → 外部 ComfyUI 进程」的旧链路。
+    位置 <code>crates/emby-engine</code>，由 Electron 主进程拉起，仅监听 <code>127.0.0.1:8189</code>。</p>
+</header>
+
+<h2><span class="num">01</span>为什么</h2>
+<p class="lead">旧链路 <code>Electron → ComfyUI(8188)</code> 依赖外部 Python 进程：启动慢、分发重
+（模型运行时 + 依赖数百 MB），且 img2img 扩散对「制版平涂」这一步既慢又不可控。新引擎：</p>
+<ul>
+  <li><b>纯 Rust 单二进制</b> — 无 Python 运行时，随 App 分发，启动毫秒级。</li>
+  <li><b>API 与 ComfyUI 对齐</b> — <code>/prompt</code> <code>/queue</code> <code>/history</code>
+    <code>/view</code> <code>/upload/image</code> <code>/object_info</code> <code>/ws</code>；
+    工作流 JSON 格式（<code>{id: {class_type, inputs}}</code> + <code>[node, slot]</code> 链接）完全一致，
+    生态工具可复用，未来节点迁移零成本。</li>
+  <li><b>制版领域原生节点</b> — <code>EmbyColorBlockStylize</code> 用 Lab KMeans 做限色平涂，
+    毫秒级、限色精确、结果可复现，比扩散模型更贴合刺绣色块分离的真实需求。</li>
+</ul>
+
+<h2><span class="num">02</span>架构映射（ComfyUI → emby-engine）</h2>
+<table>
+  <thead><tr><th>ComfyUI（Python）</th><th>emby-engine（Rust）</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td class="k">server.py · PromptServer（aiohttp）</td><td class="mono">src/server.rs（axum）</td><td>HTTP 路由 + WS；仅 127.0.0.1</td></tr>
+    <tr><td class="k">execution.py · PromptQueue</td><td class="mono">src/queue.rs</td><td>FIFO + 单 worker 串行 + interrupt 旗标</td></tr>
+    <tr><td class="k">execution.py · PromptExecutor</td><td class="mono">src/executor.rs</td><td>拓扑序执行、classic 缓存、executing / progress / executed 事件</td></tr>
+    <tr><td class="k">comfy_execution/graph.py · DynamicPrompt + TopologicalSort</td><td class="mono">src/graph.rs</td><td>输出节点反向可达子图、DFS 拓扑、环检测</td></tr>
+    <tr><td class="k">nodes.py · NODE_CLASS_MAPPINGS</td><td class="mono">src/nodes/ 注册表</td><td>NodeDef：输入规格 + 输出类型 + OUTPUT_NODE + run 函数指针</td></tr>
+    <tr><td class="k">folder_paths.py · input/output/temp</td><td class="mono">&lt;dataRoot&gt;/engine/{input,output,temp}</td><td>同布局</td></tr>
+    <tr><td class="k">/object_info 内省</td><td class="mono">同路径</td><td>前端（含未来的节点编辑器）据此渲染</td></tr>
+    <tr><td class="k">WS 消息 status / executing / progress / executed / execution_error</td><td class="mono">同协议</td><td>UI 节点高亮的数据源</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>额外能力</b> — <code>volatile</code> 节点标记（LoadImage 等依赖磁盘状态不进缓存）；
+缓存键 = class_type + 递归展开的规范化输入（对齐 ComfyUI classic cache 语义）。</div>
+
+<h2><span class="num">03</span>节点清单</h2>
+<h3>原生节点 <span class="tag native">已实现 · 纯 RUST</span></h3>
+<table>
+  <thead><tr><th>class_type</th><th>类别</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td class="k">LoadImage</td><td class="mono">image</td><td>input 目录或绝对路径加载</td></tr>
+    <tr><td class="k">ImageScale</td><td class="mono">image/upscaling</td><td>lanczos / bilinear / nearest 缩放</td></tr>
+    <tr><td class="k">ImageSize</td><td class="mono">image</td><td>输出宽高 INT</td></tr>
+    <tr><td class="k">SaveImage</td><td class="mono">image（输出节点）</td><td>写 output/，回传 ui.images</td></tr>
+    <tr><td class="k">PreviewImage</td><td class="mono">image（输出节点）</td><td>写 temp/，前端预览</td></tr>
+    <tr><td class="k">EmbyColorBlockStylize</td><td class="mono">emby/stylize</td><td>Lab KMeans 限色平涂 + 多数滤波去碎点；输出 IMAGE + palette</td></tr>
+  </tbody>
+</table>
+<h3>模型链路节点 <span class="tag stub">接口已冻结 · CANDLE 路线图</span></h3>
+<div class="pill-row">
+  <span class="pill">CheckpointLoaderSimple</span><span class="pill">VAELoader</span>
+  <span class="pill">LoraLoader</span><span class="pill">CLIPTextEncode</span>
+  <span class="pill">EmptyLatentImage</span><span class="pill">KSampler</span>
+  <span class="pill">VAEDecode</span><span class="pill">VAEEncode</span>
+</div>
+<p>class_type / 输入 / 输出类型与 ComfyUI 完全一致，执行时返回明确错误。接口先冻结，工作流与 UI 从现在起稳定。</p>
+
+<h2><span class="num">04</span>路线图：扩散推理原生落地（candle）</h2>
+<ol class="plan">
+  <li><b>candle 后端</b> — 引入 <code>candle-core</code> / <code>candle-transformers</code>，SD1.5 / SD-Turbo 起步
+    （UNet + CLIP + VAE），<code>Value::Handle</code> 占位类型承载真实权重；Safetensors 直读。</li>
+  <li><b>采样器</b> — euler / DDIM 起步（<code>sampler_name</code> / <code>scheduler</code> 枚举已对齐），逐步补齐 k_diffusion 常用项。</li>
+  <li><b>LoRA</b> — 在 LoraLoader 节点做权重合并（candle varbuilder 层操作）。</li>
+  <li><b>设备</b> — CPU 先行（制版场景图小、可接受），CUDA feature 可选编译。</li>
+  <li><b>显存管理</b> — 对应 ComfyUI 的 model management，按缓存键 LRU 卸载句柄。</li>
+</ol>
+
+<h2><span class="num">05</span>UI 借鉴点（ComfyUI → open_emby）</h2>
+<table>
+  <thead><tr><th>借鉴</th><th>落地</th></tr></thead>
+  <tbody>
+    <tr><td class="k">节点执行高亮</td><td>编辑器风格化面板 flow-strip，WS <code>executing</code> 事件驱动 pending → running → done / error</td></tr>
+    <tr><td class="k">进度协议</td><td>节点内 <code>progress(value, max)</code>（采样步数 / 聚类迭代）→ 面板细粒度读数</td></tr>
+    <tr><td class="k">object_info 内省</td><td>未来「工作流」页可直接用 <code>/object_info</code> 渲染可选节点与参数 widget</td></tr>
+    <tr><td class="k">队列与历史</td><td><code>/queue</code> <code>/history</code> 支撑未来的任务列表面板</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="num">06</span>运维</h2>
+<pre><span class="c"># cargo build --release（setup 已包含）</span>
+pnpm run engine:build
+<span class="c"># cargo run（调试用，默认 127.0.0.1:8189）</span>
+pnpm run engine:dev</pre>
+<p>主进程启动时自动拉起（<code>src/main/services/engine.ts</code>），退出时整棵进程树回收。
+App 设置项 <code>engineUrl</code> 可改地址；引擎目录为 <code>&lt;数据根&gt;/engine/</code>。</p>
+
+<footer>open_emby · emby-engine v0.1.0 · ComfyUI-architecture node graph executor in Rust</footer>
+
+</div>
+</body>
+</html>

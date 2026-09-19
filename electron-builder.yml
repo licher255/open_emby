@@ -1,0 +1,26 @@
+appId: com.openemby.app
+productName: open_emby
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+# 随包分发的原生组件与 sidecar bundle
+extraResources:
+  - from: crates/emby-engine/target/release/emby-engine.exe
+    to: bin/emby-engine.exe
+  - from: crates/emby-core/emby-core.win32-x64-msvc.node
+    to: bin/emby-core.win32-x64-msvc.node
+  - from: sidecar/dist/sidecar.cjs
+    to: sidecar/sidecar.cjs
+  - from: plugins
+    to: plugins
+asar: true
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>插件开发指南 — open_emby Plugin Architecture</title>
+<style>
+  :root {
+    --primary:#2727e6; --primary-deep:#121297; --primary-tint:#dedefb;
+    --ink:#111118; --body:#58585d; --muted:#757579;
+    --canvas:#fff; --surface:#f6f6f6; --hairline:#d9d9d9;
+    --yellow:#ffda00; --green:#16ab59; --orange:#ff7715; --pink:#ffbac4; --warm-blue:#91d8ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Inter',-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;
+         background:var(--canvas); color:var(--ink); line-height:1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 32px 96px; }
+  header.top { border-bottom:1px solid var(--hairline); padding-bottom:24px; margin-bottom:40px; }
+  .crumb { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+           letter-spacing:.4px; color:var(--muted); margin-bottom:10px; }
+  h1 { font-size:30px; letter-spacing:-0.3px; margin:0; }
+  h1 em { color:var(--primary); font-style:normal; }
+  .subtitle { color:var(--body); font-size:16px; margin:10px 0 0; }
+  h2 { font-size:21px; margin:48px 0 8px; padding-top:24px; border-top:1px solid var(--hairline); }
+  h2 .num { font-family:'IBM Plex Mono',monospace; color:var(--primary); margin-right:10px; }
+  p, li { color:var(--body); font-size:15px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin:16px 0; }
+  th { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+       letter-spacing:.4px; color:var(--muted); text-align:left; padding:8px 12px;
+       border-bottom:2px solid var(--ink); }
+  td { padding:8px 12px; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  td.k { font-weight:600; color:var(--ink); white-space:nowrap; }
+  code { font-family:'IBM Plex Mono','Cascadia Mono',monospace; font-size:12.5px;
+         background:var(--surface); border:1px solid var(--hairline); border-radius:6px; padding:1px 6px; }
+  pre { background:var(--ink); color:#e8e8ee; border-radius:12px; padding:16px 20px;
+        font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.55; overflow-x:auto; }
+  pre .c { color:#8a8a96; }
+  .note { background:var(--surface); border-radius:12px; padding:14px 18px; font-size:14px; margin:16px 0; }
+  .note b { color:var(--ink); }
+  .tag { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:.4px;
+         text-transform:uppercase; padding:3px 10px; border-radius:9999px; }
+  .tag.now { background:var(--green); color:#fff; }
+  .tag.next { background:var(--yellow); color:var(--ink); }
+  .tag.later { background:var(--surface); color:var(--muted); border:1px solid var(--hairline); }
+  footer { margin-top:64px; padding-top:16px; border-top:1px solid var(--hairline);
+           font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+           text-transform:uppercase; letter-spacing:.4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="crumb">open_emby / docs / PLUGIN GUIDE</div>
+  <h1>插件开发指南 <em>— Plugin Architecture</em></h1>
+  <p class="subtitle">设计参照 <b>Dify 插件体系</b>（manifest 驱动、权限声明、独立运行时、市场分发元数据）
+  与 <b>VS Code 扩展模型</b>（contributes 声明式贡献点、激活事件、扩展主机隔离）。
+  open_emby 的插件是"声明优先"的：manifest 说清自己是谁、要什么权限、贡献什么能力，宿主决定何时激活。</p>
+</header>
+
+<h2><span class="num">01</span>插件类型</h2>
+<table>
+  <thead><tr><th>type</th><th>用途</th><th>入口 entry</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td class="k">workflow</td><td>emby-engine 工作流包（风格化/重绘/生成，ComfyUI API 格式 JSON）</td><td class="k">workflow.json</td><td><span class="tag now">已支持</span></td></tr>
+    <tr><td class="k">exporter</td><td>新刺绣机格式导出器（PES/JEF/EXP…）</td><td class="k">TS 模块（sidecar 加载）</td><td><span class="tag next">下一迭代</span></td></tr>
+    <tr><td class="k">tool</td><td>编辑器工具（选区、配色、针法调整）</td><td class="k">JS 模块（渲染侧沙箱 iframe）</td><td><span class="tag next">下一迭代</span></td></tr>
+    <tr><td class="k">agent-skill</td><td>制版 Agent 能力（新工具/新策略）</td><td class="k">TS 模块 + 工具 schema</td><td><span class="tag later">后续</span></td></tr>
+    <tr><td class="k">theme</td><td>界面主题</td><td class="k">CSS / design tokens</td><td><span class="tag later">后续</span></td></tr>
+    <tr><td class="k">model-pack</td><td>模型包（emby-N-codename 谱系模型 + 推荐参数 + 示例）</td><td class="k">manifest 声明 + 模型文件</td><td><span class="tag later">后续</span></td></tr>
+  </tbody>
+</table>
+
+<h2><span class="num">02</span>Manifest（plugin.json）</h2>
+<pre>{
+  "id": "peony-style-pack",
+  "name": "Peony Style Pack",
+  "version": "0.1.0",
+  "type": "workflow",
+  "entry": "workflow.json",
+  "description": "牡丹风格的色块化工作流",
+  "author": "you",
+  "license": "MIT",
+  "minAppVersion": "0.0.1-beta",
+  "permissions": ["engine"],
+  "contributes": {
+    "menus": [{ "id": "peony.apply", "label": "Apply Peony Style" }],
+    "panels": []
+  }
+}</pre>
+<ul>
+  <li><code>minAppVersion</code> — 参照 Dify 的兼容性声明，宿主版本不满足则拒绝激活。</li>
+  <li><code>permissions</code> — 声明式权限，宿主逐项授权（见下节）。</li>
+  <li><code>contributes</code> — 参照 VS Code 的贡献点：菜单、面板、命令，宿主据此挂载 UI，不需要插件直接操作 DOM。</li>
+</ul>
+
+<h2><span class="num">03</span>权限模型</h2>
+<table>
+  <thead><tr><th>权限</th><th>能力</th><th>风险</th></tr></thead>
+  <tbody>
+    <tr><td class="k">engine</td><td>向 emby-engine 提交/查询工作流</td><td>低（本地计算）</td></tr>
+    <tr><td class="k">sidecar</td><td>调用制版核心 API（针迹生成/导出）</td><td>低</td></tr>
+    <tr><td class="k">fs</td><td>限定数据根目录内读写</td><td>中（越界路径一律拒绝）</td></tr>
+    <tr><td class="k">net</td><td>外网访问（下载模型等）</td><td>高（安装时明示）</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>原则</b> — 默认零权限；每个权限在安装/启用时逐项向用户明示（Dify 市场同款交互）。</div>
+
+<h2><span class="num">04</span>生命周期</h2>
+<pre><span class="c"># 宿主（src/main/services/pluginHost.ts）</span>
+discover   <span class="c"># 扫描 plugins/ 与用户插件目录</span>
+validate   <span class="c"># manifest schema 校验 + 权限清单审查</span>
+install    <span class="c"># 登记到用户配置（默认停用）</span>
+activate   <span class="c"># 按 activationEvents 惰性激活（Dify 式：用到才加载）</span>
+deactivate <span class="c"># 释放资源；停用不卸载文件</span></pre>
+
+<h2><span class="num">05</span>沙箱与隔离</h2>
+<ul>
+  <li><b>渲染侧插件</b>（tool/theme）：隔离 iframe + 受限 postMessage API，无 DOM 直访。</li>
+  <li><b>主进程/编排侧插件</b>（exporter/agent-skill）：在 sidecar 内运行，权限逐项授权；
+    重计算必须走 emby-core/emby-engine 的既有接口，不允许插件自带二进制（安全审查边界）。</li>
+  <li><b>workflow 插件</b>：纯 JSON，天然安全——只描述节点图，由引擎执行。</li>
+</ul>
+
+<h2><span class="num">06</span>分发与社区</h2>
+<ul>
+  <li><b>当前</b>：<code>plugins/&lt;id&gt;/</code> 目录 + PR 收录，CI 校验 manifest schema。</li>
+  <li><b>规划</b>：插件市场页（Dify Marketplace 式卡片流），model-pack 与 workflow 是首批上架类型；
+    模型包遵循 <code>emby-N-codename</code> 谱系命名（见模型谱系约定）。</li>
+</ul>
+
+<h2><span class="num">07</span>贡献流程</h2>
+<ul>
+  <li>Fork 仓库，在 <code>plugins/&lt;your-id&gt;/</code> 开发。</li>
+  <li>manifest 通过 <code>plugins/plugin.schema.json</code> 校验，<code>pnpm run typecheck</code> 通过。</li>
+  <li>PR 附：插件说明、截图、权限说明。</li>
+</ul>
+
+<footer>open_emby · plugin guide · v0.0.1-beta</footer>
+
+</div>
+</body>
+</html>

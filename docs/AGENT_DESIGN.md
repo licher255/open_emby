@@ -9,7 +9,7 @@ flowchart LR
     U[用户意图 + 图片] --> P[Perceive<br/>图像分析: 色彩/构图/细节]
     P --> D[Decide<br/>色数/针法/密度/顺序]
     D -->|方案| H{用户确认/调整}
-    H --> A[Act<br/>ComfyUI 生成 / 制版核心转针迹]
+ H --> A[Act<br/>emby-engine 生成 / 制版核心转针迹]
     A --> E[Evaluate<br/>仿真预览 + 针数/换色次数评估]
     E -->|不达标| D
     E -->|达标| X[导出机器文件]
@@ -19,7 +19,7 @@ flowchart LR
 | 工具 | 实现 |
 |---|---|
 | analyze_image | sidecar digitizer.pipeline（量化/连通域/几何特征） |
-| comfyui_workflow | 经主进程 ComfyUI Connector 提交工作流 |
+ | engine_workflow | 经主进程向 emby-engine（Rust 生成引擎）提交工作流 |
 | region_repaint | 选区 + inpaint 局部重绘 |
 | stitch_simulate | 针迹仿真渲染，估算针数/线长 |
 | export_file | pyembroidery 导出 DST/PES/JEF |

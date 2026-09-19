@@ -3,7 +3,7 @@ import { join } from 'path'
 import type { PluginManifest } from '@shared/types'
 
 const REQUIRED = ['id', 'name', 'version', 'type', 'entry'] as const
-const VALID_TYPES = new Set(['workflow', 'exporter', 'tool', 'agent-skill', 'theme'])
+const VALID_TYPES = new Set(['workflow', 'exporter', 'tool', 'agent-skill', 'theme', 'model-pack'])
 
 /** 扫描内置 plugins/ 目录，校验 manifest（社区插件目录后续从 settings 扩展） */
 export function listPlugins(builtinDir: string): Array<{ manifest: PluginManifest; dir: string }> {
@@ -25,7 +25,7 @@ export function listPlugins(builtinDir: string): Array<{ manifest: PluginManifes
   return out
 }
 
-/** 调用插件（workflow 类型：取工作流 JSON 交给 ComfyUI） */
+/** 调用插件（workflow 类型：取工作流 JSON 交给 emby-engine，ComfyUI API 格式） */
 export async function invokePlugin(pluginDir: string, manifest: PluginManifest, input: unknown): Promise<unknown> {
   if (manifest.type === 'workflow') {
     const wf = JSON.parse(readFileSync(join(pluginDir, manifest.entry), 'utf-8'))

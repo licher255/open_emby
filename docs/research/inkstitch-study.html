@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ink/Stitch 研读笔记 — 开源制版系统的算法拆解 | open_emby</title>
+<style>
+  :root {
+    --primary:#2727e6; --primary-deep:#121297; --primary-tint:#dedefb;
+    --ink:#111118; --body:#58585d; --muted:#757579;
+    --canvas:#fff; --surface:#f6f6f6; --hairline:#d9d9d9;
+    --yellow:#ffda00; --green:#16ab59; --orange:#ff7715; --pink:#ffbac4; --warm-blue:#91d8ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Inter',-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;
+         background:var(--canvas); color:var(--ink); line-height:1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 32px 96px; }
+  header.top { border-bottom:1px solid var(--hairline); padding-bottom:24px; margin-bottom:40px; }
+  .crumb { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+           letter-spacing:.4px; color:var(--muted); margin-bottom:10px; }
+  h1 { font-size:30px; letter-spacing:-0.3px; margin:0; }
+  h1 em { color:var(--primary); font-style:normal; }
+  .subtitle { color:var(--body); font-size:16px; margin:10px 0 0; }
+  h2 { font-size:21px; margin:48px 0 8px; padding-top:24px; border-top:1px solid var(--hairline); }
+  h2 .num { font-family:'IBM Plex Mono',monospace; color:var(--primary); margin-right:10px; }
+  h3 { font-size:16px; margin:24px 0 6px; }
+  p, li { color:var(--body); font-size:15px; }
+  .lead { font-size:17px; color:var(--ink); }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin:16px 0; }
+  th { font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+       letter-spacing:.4px; color:var(--muted); text-align:left; padding:8px 12px;
+       border-bottom:2px solid var(--ink); }
+  td { padding:8px 12px; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  td.k { font-weight:600; color:var(--ink); white-space:nowrap; }
+  code { font-family:'IBM Plex Mono','Cascadia Mono',monospace; font-size:12.5px;
+         background:var(--surface); border:1px solid var(--hairline); border-radius:6px; padding:1px 6px; }
+  pre { background:var(--ink); color:#e8e8ee; border-radius:12px; padding:16px 20px;
+        font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.55; overflow-x:auto; }
+  pre .c { color:#8a8a96; }
+  .note { background:var(--surface); border-radius:12px; padding:14px 18px; font-size:14px; margin:16px 0; }
+  .note b { color:var(--ink); }
+  .tag { font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; letter-spacing:.4px;
+         text-transform:uppercase; padding:3px 10px; border-radius:9999px; }
+  .tag.do { background:var(--green); color:#fff; }
+  .tag.next { background:var(--yellow); color:var(--ink); }
+  .tag.later { background:var(--surface); color:var(--muted); border:1px solid var(--hairline); }
+  ol.plan { counter-reset: step; list-style:none; padding-left:0; }
+  ol.plan li { counter-increment: step; margin:10px 0; padding-left:36px; position:relative; }
+  ol.plan li::before { content: counter(step); position:absolute; left:0; top:1px;
+    width:22px; height:22px; border-radius:50%; background:var(--primary); color:#fff;
+    font:600 12px/22px 'IBM Plex Mono',monospace; text-align:center; }
+  ol.plan li b { color:var(--ink); }
+  footer { margin-top:64px; padding-top:16px; border-top:1px solid var(--hairline);
+           font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);
+           text-transform:uppercase; letter-spacing:.4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="crumb">open_emby / docs / research</div>
+  <h1>Ink/Stitch 研读笔记 <em>— 开源制版系统拆解</em></h1>
+  <p class="subtitle">仓库：<code>github.com/inkstitch/inkstitch</code>（Inkscape 扩展，GPL v3）。
+  本地参考副本：<code>E:\Project-刺绣机\reference\inkstitch</code>（浅克隆，仅作算法学习，不进入产品代码）。
+  它是目前最成熟的开源刺绣制版系统，针迹算法经过大量生产验证 —— 我们的 <code>crates/emby-core</code> 针迹生成的进化路线以此为准。</p>
+</header>
+
+<h2><span class="num">01</span>架构总览</h2>
+<table>
+  <thead><tr><th>Ink/Stitch 模块</th><th>职责</th><th>我们的对应物</th></tr></thead>
+  <tbody>
+    <tr><td class="k">lib/elements/</td><td>元素层：FillStitch / SatinColumn / Stroke，参数化 + 校验</td><td class="k">制版方案 regions（要升级为元素模型）</td></tr>
+    <tr><td class="k">lib/stitches/</td><td>针迹算法：tatami_fill / auto_satin / running_stitch / contour_fill 等 12 种</td><td class="k">crates/emby-core/src/stitch.rs</td></tr>
+    <tr><td class="k">lib/stitch_plan/</td><td>针迹序列模型：Stitch / StitchGroup / ColorBlock / LockStitch</td><td class="k">StitchPoint / StitchResult</td></tr>
+    <tr><td class="k">lib/extensions/</td><td>工序编排：params / simulator / output / lettering</td><td class="k">sidecar + Electron 工作台</td></tr>
+    <tr><td class="k">pyembroidery（依赖）</td><td>机器格式编解码 DST/PES/JEF…</td><td class="k">crates/emby-core/src/dst.rs（自研）</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>依赖启示</b> — Ink/Stitch 的几何全靠 <code>shapely</code>（GEOS）做多边形运算：扫描线求交、
+buffer 缩扩、连通域、合法性修复。Rust 侧对应物是 <code>geo</code> crate（或 <code>geo-boolop</code>/<code>i_overlay</code> 做布尔运算）。
+引入几何库是针迹生成进阶的前提。</div>
+
+<h2><span class="num">02</span>tatami_fill 算法精要（fill.py）</h2>
+<p class="lead">pipeline：<code>intersect_region_with_grating → pull_runs → section_to_stitches</code></p>
+<ol class="plan">
+  <li><b>格栅求交</b> — 以任意角度生成平行扫描线，与多边形求交得到每行的填充段（我们当前只支持水平行，
+    且工作在像素栅格上；Ink/Stitch 在矢量多边形上做精确求交）。</li>
+  <li><b>错位针（staggers）</b> — 相邻行的针位按 <code>row_num / staggers % 1</code> 错相，
+    并且错相以原点为绝对参考 —— <b>相邻色块拼接处针位完美对齐</b>，这是我们像素方案天然欠缺的。</li>
+  <li><b>pull_runs</b> — 把可连通（垂直相邻）的段串成 run，避免每行都跳针；我们的「近距直针相连」是它的粗糙版。</li>
+  <li><b>随机针长抖动</b> — <code>split_segment_random_phase</code>：针长在 max_stitch_length 附近做受控随机，
+    消除肉眼可见的机械条纹，绣面更均匀。</li>
+</ol>
+
+<h2><span class="num">03</span>值得直接借鉴的设计</h2>
+<table>
+  <thead><tr><th>概念</th><th>Ink/Stitch 做法</th><th>优先级</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="k">底针（underlay）</td>
+      <td>填针前先绣一层稀疏底针（独立角度/行距/inset），固定面料、撑起面针。FillStitch.do_underlay 独立成组</td>
+      <td><span class="tag next">下一迭代</span></td>
+    </tr>
+    <tr>
+      <td class="k">锁针（lock stitch）</td>
+      <td>每段首尾/换色处加锁针防散线，可配置样式（ StitchGroup.lock_stitches ）</td>
+      <td><span class="tag next">下一迭代</span></td>
+    </tr>
+    <tr>
+      <td class="k">拉展补偿</td>
+      <td>pull_compensation（mm 或 %）外扩形状补偿面料拉扯；expand 参数补偿色块间缝隙</td>
+      <td><span class="tag next">下一迭代</span></td>
+    </tr>
+    <tr>
+      <td class="k">Stitch 元数据</td>
+      <td>Stitch 带 jump/trim/stop/color_change + tags（fill_row_start…）—— trim/stop 是真实机器控制</td>
+      <td><span class="tag next">下一迭代</span></td>
+    </tr>
+    <tr>
+      <td class="k">校验系统</td>
+      <td>每个元素 validation_warnings()：小形状警告（建议改走针/缎面）、形状非法、不连通、
+        expand 失败…带位置和解决步骤 —— 正是我们「检查面板」要长成的样子</td>
+      <td><span class="tag next">下一迭代</span></td>
+    </tr>
+    <tr>
+      <td class="k">缎面针</td>
+      <td>SatinColumn：沿中线骨架两侧往返 zigzag，auto_satin 可从填充分 shape 自动提取缎面柱</td>
+      <td><span class="tag later">后续</span></td>
+    </tr>
+    <tr>
+      <td class="k">矢量工作流</td>
+      <td>以 SVG 路径为源，用户直接编辑矢量形状；我们是位图限色 → 区域，可在量化后转矢量轮廓</td>
+      <td><span class="tag later">后续</span></td>
+    </tr>
+    <tr>
+      <td class="k">字库 lettering</td>
+      <td>fonts/ 子模块 + lettering 扩展做刺绣字体 —— 刺绣软件的高频刚需</td>
+      <td><span class="tag later">后续</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span class="num">04</span>对 stitch.rs 的改造清单</h2>
+<ol class="plan">
+  <li><b>引入 <code>geo</code> crate</b> — 区域从像素标签图提取矢量轮廓（marching squares → 简化），
+    之后扫描线求交、buffer 缩扩、合法性修复全部矢量精确化。</li>
+  <li><b>错位针 + 随机针长</b> — 先保持像素方案，把 stagger（4 行错相）和针长抖动移植过来，成本低收益大。</li>
+  <li><b>底针层</b> — 大色块填针前生成 45°/135° 稀疏底针，行距 2-3mm。</li>
+  <li><b>锁针</b> — 每色段首尾加 3 针小三角锁针。</li>
+  <li><b>StitchPoint 扩展</b> — flag 增加 trim/stop；导出 DST 时 trim 映射为带剪线位的跳针。</li>
+  <li><b>检查项升级</b> — 参考其 validation：过小区域（&lt;2mm² 建议走针）、细条（建议缎面）、超长跳线定位到坐标。</li>
+</ol>
+
+<div class="note"><b>许可注意</b> — Ink/Stitch 是 GPL v3：我们只学习算法思想并自行用 Rust 重写，
+不复制其代码文本；DST 编码器等我们是独立实现的，不受影响。</div>
+
+<footer>open_emby research · inkstitch study · 2026-09</footer>
+
+</div>
+</body>
+</html>

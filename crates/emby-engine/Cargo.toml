@@ -1,0 +1,23 @@
+[package]
+name = "emby-engine"
+version = "0.1.0"
+edition = "2021"
+description = "open_emby native generation engine - ComfyUI-architecture node graph execution server in Rust"
+
+[[bin]]
+name = "emby-engine"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws", "multipart", "json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+rand = "0.9"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

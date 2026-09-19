@@ -6,7 +6,13 @@ import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const here = dirname(fileURLToPath(import.meta.url))
+// dev(tsx/ESM): import.meta 可用；prod(esbuild CJS bundle): import.meta 为空对象，走 EMBY_CORE_NODE
+let here = ''
+try {
+  here = dirname(fileURLToPath(import.meta.url as string))
+} catch {
+  here = process.cwd()
+}
 const crateDir = join(here, '..', '..', 'crates', 'emby-core')
 
 export interface StitchRegion {
@@ -24,8 +30,25 @@ export interface AnalysisResult {
 }
 export interface StitchRecord { dxMm: number; dyMm: number; flag: number }
 
+export interface StitchPoint {
+  x: number // mm，向右
+  y: number // mm，向下
+  flag: number // 0=stitch 1=jump 2=color_change
+  color: number // palette 索引
+}
+export interface StitchResult {
+  points: StitchPoint[]
+  palette: string[]
+  widthMm: number
+  heightMm: number
+  stitchCount: number
+  colorChanges: number
+  backgroundIndex: number
+}
+
 interface EmbyCore {
   analyzeImage(path: string, maxColors: number, widthMm: number): AnalysisResult
+  generateStitches(imagePath: string, maxColors: number, widthMm: number): StitchResult
   phash(path: string): string
   dstEncode(records: StitchRecord[], name: string): Buffer
   saveResizedPng(src: string, dst: string, size: number): void
@@ -36,12 +59,14 @@ let core: EmbyCore | null = null
 export function loadCore(): EmbyCore {
   if (core) return core
   const candidates = [
+    // 打包后：主进程通过环境变量指向 resources/bin 下的原生模块
+    ...(process.env.EMBY_CORE_NODE ? [process.env.EMBY_CORE_NODE] : []),
     join(crateDir, 'emby-core.win32-x64-msvc.node'),
     join(crateDir, 'index.js')
   ]
   for (const c of candidates) {
     if (existsSync(c)) {
-      const req = createRequire(import.meta.url)
+      const req = createRequire(join(here, 'noop.js'))
       core = req(c) as EmbyCore
       return core
     }
