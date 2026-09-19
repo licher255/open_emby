@@ -23,12 +23,12 @@ pub struct AnalysisResult {
     pub height_mm: f64,
 }
 
-fn srgb_to_linear(c: u8) -> f64 {
+pub(crate) fn srgb_to_linear(c: u8) -> f64 {
     let v = c as f64 / 255.0;
     if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
 }
 
-fn rgb_to_lab(r: u8, g: u8, b: u8) -> Lab {
+pub(crate) fn rgb_to_lab(r: u8, g: u8, b: u8) -> Lab {
     let (rl, gl, bl) = (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b));
     let x = rl * 0.4124 + gl * 0.3576 + bl * 0.1805;
     let y = rl * 0.2126 + gl * 0.7152 + bl * 0.0722;
@@ -38,7 +38,7 @@ fn rgb_to_lab(r: u8, g: u8, b: u8) -> Lab {
     (116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
 }
 
-fn lab_to_hex(l: Lab) -> String {
+pub(crate) fn lab_to_hex(l: Lab) -> String {
     let (lv, a, b) = l;
     let finv = |t: f64| if t > 0.206893 { t.powi(3) } else { (t - 16.0 / 116.0) / 7.787 };
     let fy = (lv + 16.0) / 116.0;
@@ -55,12 +55,12 @@ fn lab_to_hex(l: Lab) -> String {
     format!("#{:02x}{:02x}{:02x}", r, g, b)
 }
 
-fn dist2(a: Lab, b: Lab) -> f64 {
+pub(crate) fn dist2(a: Lab, b: Lab) -> f64 {
     (a.0 - b.0).powi(2) + (a.1 - b.1).powi(2) + (a.2 - b.2).powi(2)
 }
 
 /// KMeans（k-means++ 初始化）
-fn kmeans(points: &[Lab], k: usize, iters: usize) -> (Vec<u32>, Vec<Lab>) {
+pub(crate) fn kmeans(points: &[Lab], k: usize, iters: usize) -> (Vec<u32>, Vec<Lab>) {
     use rand::Rng;
     let mut rng = rand::rng();
     let n = points.len();

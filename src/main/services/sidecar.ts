@@ -1,17 +1,23 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { app } from 'electron'
 import { getSettings } from './settings'
 
 let proc: ChildProcess | null = null
 
-/** sidecar 源码目录（dev: 仓库内；prod: 打包进 resources，后续 esbuild 单文件化） */
+/** sidecar 源码目录（dev: 仓库内；prod: 打包进 resources/sidecar） */
 function sidecarDir(): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'sidecar')
   return join(__dirname, '../../sidecar')
 }
 
-/** 用 sidecar 自带的 tsx 运行 TypeScript（无需预编译，HMR 友好；生产构建时改为 esbuild bundle） */
+/** dev: 用 sidecar 自带的 tsx 直跑 TS（HMR 友好）；
+ *  prod: 用 Electron 内置 Node（ELECTRON_RUN_AS_NODE）跑 esbuild 打包的 sidecar.cjs */
 function resolveRunner(): { cmd: string; args: string[] } {
+  if (app.isPackaged) {
+    return { cmd: process.execPath, args: [join(sidecarDir(), 'sidecar.cjs')] }
+  }
   const tsxCli = join(sidecarDir(), 'node_modules', 'tsx', 'dist', 'cli.mjs')
   const entry = join(sidecarDir(), 'src', 'main.ts')
   if (existsSync(tsxCli)) return { cmd: 'node', args: [tsxCli, entry] }
@@ -24,7 +30,15 @@ export function startSidecar(onLog: (line: string) => void): void {
   proc = spawn(cmd, args, {
     cwd: sidecarDir(),
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, OPEN_EMBY_DATA_ROOT: getSettings().dataRoot }
+    env: {
+      ...process.env,
+      OPEN_EMBY_DATA_ROOT: getSettings().dataRoot,
+      // prod: ELECTRON_RUN_AS_NODE 让 Electron 作为纯 Node 运行 sidecar bundle
+      ...(app.isPackaged ? {
+        ELECTRON_RUN_AS_NODE: '1',
+        EMBY_CORE_NODE: join(process.resourcesPath, 'bin', 'emby-core.win32-x64-msvc.node')
+      } : {})
+    }
   })
   proc.stdout?.on('data', (d) => onLog(String(d).trim()))
   proc.stderr?.on('data', (d) => onLog(String(d).trim()))

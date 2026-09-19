@@ -4,14 +4,17 @@
 import Fastify from 'fastify'
 import multipart from '@fastify/multipart'
 import { plan as agentPlan } from './agent/core.js'
-import { exportPlan } from './exporters/index.js'
+import { exportStitches } from './exporters/index.js'
 import * as collector from './flywheel/collector.js'
 import * as training from './training/prepare.js'
+import { loadCore } from './native.js'
 
 const DATA_ROOT = process.env.OPEN_EMBY_DATA_ROOT ?? 'E:\\Project-刺绣机'
 const PORT = Number(process.env.OPEN_EMBY_SIDECAR_PORT ?? 8100)
 
-const app = Fastify({ logger: false })
+async function main() {
+// bodyLimit 放宽：针迹序列 JSON 可达数万点（数 MB）
+const app = Fastify({ logger: false, bodyLimit: 64 * 1024 * 1024 })
 await app.register(multipart)
 
 app.get('/health', async () => ({ ok: true, service: 'open_emby-sidecar', version: '0.1.0', runtime: 'node+rust' }))
@@ -22,10 +25,17 @@ app.post('/digitize/plan', async (req) => {
   return agentPlan(b.imagePath, b.intent ?? '', b.maxColors ?? 6, b.widthMm ?? 100)
 })
 
-interface ExportBody { plan: any; format?: string; outDir: string }
+// 针迹生成：色块图 → 真实针迹序列（Rust 核心）
+interface StitchesBody { imagePath: string; maxColors?: number; widthMm?: number }
+app.post('/digitize/stitches', async (req) => {
+  const b = req.body as StitchesBody
+  return loadCore().generateStitches(b.imagePath, b.maxColors ?? 8, b.widthMm ?? 100)
+})
+
+interface ExportBody { points: Array<{ x: number; y: number; flag: number; color: number }>; palette?: string[]; name?: string; format?: string; outDir: string }
 app.post('/export', async (req) => {
   const b = req.body as ExportBody
-  const files = exportPlan(b.plan, b.format ?? 'dst', b.outDir)
+  const files = exportStitches(b.points, b.palette, b.name ?? 'design', b.format ?? 'dst', b.outDir)
   return { ok: true, files }
 })
 
@@ -79,3 +89,9 @@ app.get('/training/stats', async () => training.stats(DATA_ROOT))
 
 await app.listen({ host: '127.0.0.1', port: PORT })
 console.log(`[sidecar] open_emby sidecar listening on http://127.0.0.1:${PORT} (node+rust)`)
+}
+
+main().catch((e) => {
+  console.error('[sidecar] fatal:', e)
+  process.exit(1)
+})

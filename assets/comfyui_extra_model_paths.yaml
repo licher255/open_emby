@@ -1,9 +1,0 @@
-# ComfyUI 外部模型路径映射 —— 让 ComfyUI 直接使用 E:\Project-刺绣机\models
-# 用法：复制到 ComfyUI 配置目录（桌面版通常在 用户目录/ComfyUI/extra_model_paths.yaml），
-# 或由 open_emby Model Manager 自动写入并重启 ComfyUI 生效。
-
-open_emby:
-  base_path: E:/Project-刺绣机/models/
-  checkpoints: checkpoints
-  loras: loras
-  controlnet: controlnet

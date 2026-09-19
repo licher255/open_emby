@@ -1,68 +1,75 @@
-/** 刺绣机文件导出编排：DigitizePlan -> 针迹序列(TS) -> DST 编码(Rust)。
- *  MVP：按色块网格填充占位；真实针迹路径生成下沉至 Rust 后替换 buildRecords。 */
+/** 刺绣机文件导出编排：真实针迹序列（Rust 生成） -> DST 编码（Rust）。
+ *  针迹路径生成见 crates/emby-core/src/stitch.rs；此处只做相对位移换算与落盘。 */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { loadCore, FLAG, type StitchRecord } from '../native.js'
+import { loadCore, type StitchPoint, type StitchRecord } from '../native.js'
 
-interface PlanRegion { color: string; stitchType: string; density: number }
-interface Plan {
-  palette?: string[]
-  regions?: PlanRegion[]
-  sizeMm: { width: number; height: number }
-}
-
-export function exportPlan(plan: Plan, format: string, outDir: string): string[] {
-  mkdirSync(outDir, { recursive: true })
-  if (format !== 'dst') {
-    throw new Error(`暂不支持格式 ${format}（MVP 仅 dst；pes/jef 编解码器将在 crates/emby-core 实现）`)
-  }
-  const records = buildRecords(plan)
-  const buf = loadCore().dstEncode(records, 'design')
-  const path = join(outDir, 'design.dst')
-  writeFileSync(path, buf)
-  return [path]
-}
-
-/** 针迹序列编排：每色一块，换色记录分隔（多色编排顺序 = palette 顺序） */
-function buildRecords(plan: Plan): StitchRecord[] {
+/** 绝对坐标针迹点 → DST 相对位移记录 */
+function toRecords(points: StitchPoint[]): StitchRecord[] {
   const out: StitchRecord[] = []
-  const w = plan.sizeMm.width
-  const h = plan.sizeMm.height
-  const palette = plan.palette ?? []
   let cx = 0
   let cy = 0
-  const move = (x: number, y: number, flag: number) => {
-    out.push({ dxMm: x - cx, dyMm: y - cy, flag })
-    cx = x
-    cy = y
-  }
-  palette.forEach((color, i) => {
-    if (i > 0) out.push({ dxMm: 0, dyMm: 0, flag: FLAG.COLOR })
-    const regions = (plan.regions ?? []).filter((r) => r.color === color)
-    if (regions.length === 0) {
-      move(0, 0, FLAG.STITCH)
-      move(w, 0, FLAG.STITCH)
-      return
+  for (const p of points) {
+    if (p.flag === 2) { // color change：位移为零的控制记录
+      out.push({ dxMm: 0, dyMm: 0, flag: 2 })
+      continue
     }
-    for (const r of regions) fillRegion(move, r, w, h)
-  })
+    out.push({ dxMm: p.x - cx, dyMm: p.y - cy, flag: p.flag })
+    cx = p.x
+    cy = p.y
+  }
   return out
 }
 
-/** 网格扫描填充（占位实现）：蛇形往返直针 */
-function fillRegion(
-  move: (x: number, y: number, f: number) => void,
-  region: PlanRegion,
-  w: number,
-  h: number
-): void {
-  const step = Math.max(1, (region.density || 0.4) * 4)
-  move(0, 0, FLAG.JUMP)
-  let y = 0
-  let flip = false
-  while (y <= h) {
-    move(flip ? 0 : w, y, FLAG.STITCH)
-    flip = !flip
-    y += step
+/** 生产单（色序表）：多色编排随 DST 一起产出，车间按此换线 */
+interface ColorSheetEntry { order: number; colorIndex: number; stitches: number }
+
+export function exportStitches(
+  points: StitchPoint[],
+  palette: string[] | undefined,
+  name: string,
+  format: string,
+  outDir: string
+): string[] {
+  mkdirSync(outDir, { recursive: true })
+  if (format !== 'dst') {
+    throw new Error(`暂不支持格式 ${format}（当前 dst；pes/jef 编解码器将在 crates/emby-core 扩展）`)
   }
+  if (!points?.length) throw new Error('没有可导出的针迹（请先生成针迹）')
+  const safe = (name.replace(/[^a-zA-Z0-9_]/g, '_') || 'design').slice(0, 16)
+  const buf = loadCore().dstEncode(toRecords(points), safe)
+  const path = join(outDir, `${safe}.dst`)
+  writeFileSync(path, buf)
+
+  // 生产单：色序 + 每色针数 + 预估时长（按 800 针/分钟）
+  const counts = new Map<number, number>()
+  let stitches = 0
+  for (const p of points) {
+    if (p.flag === 0) {
+      stitches++
+      counts.set(p.color, (counts.get(p.color) ?? 0) + 1)
+    }
+  }
+  const sheet: ColorSheetEntry[] = []
+  const seen = new Set<number>()
+  for (const p of points) {
+    if (!seen.has(p.color) && counts.has(p.color)) {
+      seen.add(p.color)
+      sheet.push({ order: sheet.length + 1, colorIndex: p.color, stitches: counts.get(p.color)! })
+    }
+  }
+  const sheetDoc = {
+    name: safe,
+    stitches,
+    colorChanges: Math.max(0, sheet.length - 1),
+    estimatedMinutes: Math.round((stitches / 800) * 10) / 10,
+    colorOrder: sheet.map((e) => ({
+      order: e.order,
+      color: palette?.[e.colorIndex] ?? `#${e.colorIndex}`,
+      stitches: e.stitches
+    }))
+  }
+  const sheetPath = join(outDir, `${safe}.colorsheet.json`)
+  writeFileSync(sheetPath, JSON.stringify(sheetDoc, null, 2), 'utf-8')
+  return [path, sheetPath]
 }

@@ -1,7 +1,7 @@
 ---
-version: alpha.2
+version: alpha.3
 name: open-emby-design
-description: A playful-but-precise creative-tool studio anchored on a clean white canvas and Emby Blue (#2727e6), the single brand voltage that carries every primary CTA, the generate action, and the active tool state — learned from SuperHi's edtech language where learning software must feel like a toy but work like an instrument. Type runs a grotesque pair (Neue Haas Grotesk Display/Text, open substitute Inter) at confident sizes, with IBM Plex Mono carrying every technical readout — stitch counts, millimeter dimensions, color hex — because embroidery data should look like what it is: machine code made beautiful. A rotating "thread palette" of saturated accents (yellow #ffda00, green #16ab59, orange #ff7715, pink #ffbac4, warm-blue #91d8ec) codes stitch types and status, echoing the physical thread rack of a real embroidery studio. Corners are generous (8px inputs, 16px cards, 24px panels, full pills) and elevation is capped at one shadow tier — depth comes from color-blocking and sticker-like floating badges, not from shadows.
+description: Apple-style restraint for an industrial digitizing tool — clean white cards on a light-gray (#f5f5f7) shell, hairline borders instead of shadows, depth communicated by typography weight not elevation. Emby Blue (#2727e6) is the single accent, reserved for primary actions, selection, and in-progress states. Type is the system stack (SF/Segoe/PingFang) with clear three-level hierarchy (#1d1d1f / #424245 / #6e6e73); IBM Plex Mono appears only for technical readouts (stitch counts, mm, hex). Thread-palette colors survive only as semantic status dots (green ok / orange warn / red error) and asset-role markers. Radius tightened (6–14px), controls 30–38px tall, toasts are dark HUD chips with a status dot. Every pixel must earn its place — 克制。
 
 colors:
   # ---- brand ----

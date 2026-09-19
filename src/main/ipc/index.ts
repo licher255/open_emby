@@ -1,37 +1,37 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
 import { basename, extname, join } from 'path'
 import { IpcChannels } from '@shared/ipc'
-import type { AppSettings, DigitizePlan, ExportRequest } from '@shared/types'
+import type { AppSettings, DigitizePlan, EngineProgressEvent, ExportRequest, ProjectImageKind, StitchResult } from '@shared/types'
 import { getSettings, setSettings } from '../services/settings'
-import { comfyStatus, submitWorkflow, stylizeImage } from '../services/comfyui'
-import { sidecarStatus, sidecarCall, startSidecar } from '../services/sidecar'
+import { engineStatus, startEngine, stopEngine, submitWorkflow, stylizeImage } from '../services/engine'
+import { sidecarStatus, sidecarCall, startSidecar, stopSidecar } from '../services/sidecar'
 import { listModels } from '../services/modelManager'
 import { listPlugins, invokePlugin } from '../services/pluginHost'
+import { createProject, importImage, listProjectImages, listProjects, loadProjectState, projectHistory, restoreProject, saveImageDataUrl, saveProjectState } from '../services/projects'
 
-const PLUGINS_DIR = join(__dirname, '../../plugins')
+// dev: 仓库内 plugins/；打包后: resources/plugins
+const PLUGINS_DIR = app.isPackaged
+  ? join(process.resourcesPath, 'plugins')
+  : join(__dirname, '../../plugins')
 
 export function registerIpc(): void {
   ipcMain.handle(IpcChannels.envStatus, async () => ({
-    comfyui: await comfyStatus(),
+    engine: await engineStatus(),
     sidecar: await sidecarStatus(),
-    dataRoot: getSettings().dataRoot
+    dataRoot: getSettings().dataRoot,
+    version: app.getVersion()
   }))
 
-  ipcMain.handle(IpcChannels.comfyStatus, () => comfyStatus())
-  ipcMain.handle(IpcChannels.comfySubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
+  ipcMain.handle(IpcChannels.engineStatus, () => engineStatus())
+  ipcMain.handle(IpcChannels.engineSubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
 
-  // 风格化（制版第一步：平涂色块化），进度推送 comfyProgress
-  ipcMain.handle(IpcChannels.comfyStylize, async (e, args: { imagePath: string; maxColors?: number; denoise?: number }) => {
+  // 风格化（制版第一步：平涂色块化），节点级进度推送 engineProgress
+  ipcMain.handle(IpcChannels.engineStylize, async (e, args: { imagePath: string; maxColors?: number }) => {
     const win = e.sender
-    const s = getSettings()
-    const send = (msg: string) => { if (!win.isDestroyed()) win.send(IpcChannels.comfyProgress, msg) }
-    return stylizeImage(args.imagePath, {
-      checkpoint: s.comfyCheckpoint,
-      denoise: args.denoise,
-      maxColors: args.maxColors
-    }, send)
+    const send = (ev: EngineProgressEvent) => { if (!win.isDestroyed()) win.send(IpcChannels.engineProgress, ev) }
+    return stylizeImage(args.imagePath, { maxColors: args.maxColors }, send)
   })
 
   // 图片选择对话框（任意常见格式）
@@ -56,10 +56,27 @@ export function registerIpc(): void {
   ipcMain.handle(IpcChannels.sidecarStatus, () => sidecarStatus())
   ipcMain.handle(IpcChannels.sidecarDigitizePlan, (_e, args: { imagePath: string; intent: string }) =>
     sidecarCall<DigitizePlan>('/digitize/plan', args))
+  ipcMain.handle(IpcChannels.sidecarDigitizeStitches, (_e, args: { imagePath: string; maxColors?: number; widthMm?: number }) =>
+    sidecarCall<StitchResult>('/digitize/stitches', args))
   ipcMain.handle(IpcChannels.sidecarExport, (_e, req: ExportRequest) =>
     sidecarCall<{ ok: boolean; files: string[] }>('/export', req))
 
   ipcMain.handle(IpcChannels.modelList, () => listModels())
+
+  // ---------- 项目库 ----------
+  ipcMain.handle(IpcChannels.projectList, () => listProjects())
+  ipcMain.handle(IpcChannels.projectCreate, (_e, name: string) => createProject(name))
+  ipcMain.handle(IpcChannels.projectImages, (_e, id: string) => listProjectImages(id))
+  ipcMain.handle(IpcChannels.projectImportImage, (_e, args: { projectId: string; srcPath: string }) =>
+    importImage(args.projectId, args.srcPath))
+  ipcMain.handle(IpcChannels.projectSaveImage, (_e, args: { projectId: string; dataUrl: string; stem: string; kind?: ProjectImageKind; derivedFrom?: string }) =>
+    saveImageDataUrl(args.projectId, args.dataUrl, args.stem, args.kind ?? 'stylized', args.derivedFrom))
+  ipcMain.handle(IpcChannels.projectLoadState, (_e, id: string) => loadProjectState(id))
+  ipcMain.handle(IpcChannels.projectSaveState, (_e, args: { projectId: string; state: Record<string, unknown>; message: string }) =>
+    saveProjectState(args.projectId, args.state, args.message))
+  ipcMain.handle(IpcChannels.projectHistory, (_e, id: string) => projectHistory(id))
+  ipcMain.handle(IpcChannels.projectRestore, (_e, args: { projectId: string; oid: string }) =>
+    restoreProject(args.projectId, args.oid))
 
   ipcMain.handle(IpcChannels.pluginList, () => listPlugins(PLUGINS_DIR).map((p) => p.manifest))
   ipcMain.handle(IpcChannels.pluginInvoke, (_e, id: string, input: unknown) => {
@@ -118,4 +135,10 @@ export function registerIpc(): void {
 
 export function bootServices(onLog: (line: string) => void): void {
   startSidecar(onLog)
+  startEngine(onLog)
+}
+
+export function shutdownServices(): void {
+  stopSidecar()
+  stopEngine()
 }
