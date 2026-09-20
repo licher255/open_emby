@@ -13,6 +13,7 @@ export const en = {
   'modal.namePlaceholder': 'Project name, e.g. Peony cushion 12 colors',
   'modal.cancel': 'Cancel',
   'modal.create': 'Create',
+  'modal.ok': 'OK',
 
   // ---- 项目主页 ----
   'projects.title': 'Projects',
@@ -183,6 +184,8 @@ export const en = {
   'toast.fail.canvas': 'Canvas adjust failed: {error}',
   'toast.refineDone': 'Edits saved as a new version',
   'toast.fail.refine': 'Saving edits failed: {error}',
+  'toast.nothingToUndo': 'Nothing to undo here',
+  'toast.dataRootChanged': 'Data root updated — projects switch now; backend services will use it after restart',
 
   // ---- 设置与环境 ----
   'settings.title': 'Settings & Environment',
@@ -199,6 +202,7 @@ export const en = {
   'settings.engine': 'Generation engine emby-engine (Rust)',
   'settings.sidecar': 'Digitizing sidecar',
   'settings.dataRoot': 'Data root',
+  'settings.changeDataRoot': 'Change…',
   'settings.loading': 'Loading…',
   'settings.models': 'Model repository ({count})',
   'settings.modelsEmpty': 'No models in models/ yet — download from HuggingFace and they appear here',

@@ -253,7 +253,7 @@ export default function LayerEditor({ blocksUrl, lineArtUrl, onSave }: Props) {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'z') { event.preventDefault(); undo() }
     }
-    const onMenuUndo = () => undo()
+    const onMenuUndo = (e: Event) => { e.preventDefault(); undo() } // preventDefault = 已消费（App 据此决定是否提示"无可撤销"）
     window.addEventListener('keydown', onKey)
     window.addEventListener('emby:undo', onMenuUndo)
     return () => {

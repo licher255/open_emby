@@ -15,6 +15,7 @@ export const zhCN: Messages = {
   'modal.namePlaceholder': '项目名称，如：牡丹靠垫 12 色',
   'modal.cancel': '取消',
   'modal.create': '创建',
+  'modal.ok': '好',
 
   // ---- 项目主页 ----
   'projects.title': '项目',
@@ -97,6 +98,8 @@ export const zhCN: Messages = {
   'toast.fail.canvas': '画布调整失败：{error}',
   'toast.refineDone': '修改已保存为新版本',
   'toast.fail.refine': '保存修改失败：{error}',
+  'toast.nothingToUndo': '此处没有可撤销的操作',
+  'toast.dataRootChanged': '数据根已更新：项目库即刻生效，后台服务重启后使用新目录',
 
   // ---- 编辑器：图稿库 ----
   'editor.importImage': '＋ 导入图稿',
@@ -203,6 +206,7 @@ export const zhCN: Messages = {
   'settings.engine': '生成引擎 emby-engine（Rust）',
   'settings.sidecar': '制版 Sidecar',
   'settings.dataRoot': '数据根目录',
+  'settings.changeDataRoot': '更改…',
   'settings.loading': '加载中…',
   'settings.models': '模型仓库（{count}）',
   'settings.modelsEmpty': 'models/ 目录暂无模型，从 HuggingFace 下载后自动列出',

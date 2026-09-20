@@ -3,9 +3,11 @@ import type { ProjectInfo } from '@shared/types'
 import Projects from './pages/Projects'
 import Titlebar, { type MenuAction } from './components/Titlebar'
 import Toasts from './components/Toasts'
+import DialogHost from './components/DialogHost'
 import Icon from './components/Icon'
 import { useT } from './i18n'
 import { STEP_ICON, STEP_KEY, STEP_ORDER } from './steps'
+import { toast } from './stores/toast'
 import { useWorkbench } from './stores/workbench'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -52,7 +54,13 @@ export default function App() {
       case 'newProject': setCreating(true); break
       case 'openSettings': navTo({ kind: 'settings' }); break
       case 'quit': window.openEmby.window.close(); break
-      case 'undo': window.dispatchEvent(new CustomEvent('emby:undo')); break
+      case 'undo': {
+        // 撤销由当前上下文（如图层编辑器）消费；无人消费时给出反馈而不是静默
+        const ev = new CustomEvent('emby:undo', { cancelable: true })
+        window.dispatchEvent(ev)
+        if (!ev.defaultPrevented) toast.info(t('toast.nothingToUndo'))
+        break
+      }
       case 'toggleSidebar': setSidebarVisible((v) => !v); break
       case 'zoomIn': setZoom((z) => Math.min(1.6, z + 0.1)); break
       case 'zoomOut': setZoom((z) => Math.max(0.7, z - 0.1)); break
@@ -62,7 +70,7 @@ export default function App() {
       case 'feature': window.open(`${REPO}/issues/new`); break
       case 'docs': window.open(REPO); break
     }
-  }, [navTo])
+  }, [navTo, t])
 
   const refreshProjects = useCallback(async () => {
     try { setProjects(await window.openEmby.projects.list()) } catch { /* 忽略 */ }
@@ -70,12 +78,20 @@ export default function App() {
 
   useEffect(() => { refreshProjects() }, [refreshProjects])
 
+  // Esc 关闭新建项目对话框（HIG：模态可被 Esc 取消）
+  useEffect(() => {
+    if (!creating) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCreating(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [creating])
+
   async function createProject() {
     const p = await window.openEmby.projects.create(newName.trim() || '未命名制版')
     setCreating(false)
     setNewName('')
     await refreshProjects()
-    setView({ kind: 'editor', project: p })
+    navTo({ kind: 'editor', project: p })
   }
 
   const pageTitle =
@@ -95,6 +111,7 @@ export default function App() {
         onMenuAction={onMenuAction}
       />
       <Toasts />
+      <DialogHost />
       <div className="app">
         {sidebarVisible && (
         <nav>

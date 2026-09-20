@@ -5,6 +5,7 @@ import type { LocaleKey } from '../i18n/en'
 import type { ModelInfo, PluginManifest } from '@shared/types'
 import { MODEL_LINEUP } from '@shared/modelLineup'
 import Icon, { type IconName } from '../components/Icon'
+import { toast } from '../stores/toast'
 
 const LOCALE_LABEL: Record<Locale, string> = { en: 'English', 'zh-CN': '简体中文' }
 
@@ -46,6 +47,15 @@ export default function Dashboard() {
     await window.openEmby.settings.set({ locale: l })
   }
 
+  /** 修改数据根：项目库即刻生效；sidecar/engine 以启动时的环境变量为准，重启后使用新目录 */
+  async function changeDataRoot() {
+    const dir = await window.openEmby.files.selectDirectory()
+    if (!dir || dir === status?.dataRoot) return
+    await window.openEmby.settings.set({ dataRoot: dir })
+    await refresh()
+    toast.info(t('toast.dataRootChanged'))
+  }
+
   return (
     <div className="settings-page">
       <h1>{t('settings.title')}</h1>
@@ -76,6 +86,7 @@ export default function Dashboard() {
                 <div className="card">
                   <h2>{t('settings.dataRoot')}</h2>
                   <p className="mono-meta">{status.dataRoot}</p>
+                  <button className="btn-outline btn-sm" onClick={changeDataRoot}>{t('settings.changeDataRoot')}</button>
                 </div>
               )}
             </>

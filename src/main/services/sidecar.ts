@@ -89,6 +89,9 @@ export async function sidecarCall<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-  if (!res.ok) throw new Error(`sidecar ${res.status}: ${path}`)
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`sidecar ${res.status}: ${path}${detail ? ` — ${detail.slice(0, 300)}` : ''}`)
+  }
   return res.json() as Promise<T>
 }

@@ -1,6 +1,6 @@
-import { app, ipcMain, dialog, BrowserWindow } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow, nativeImage } from 'electron'
 import { randomUUID } from 'crypto'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync, statSync } from 'fs'
 import { basename, extname, join } from 'path'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, DigitizePlan, EngineProgressEvent, ExportRequest, ProjectImageKind, StitchResult } from '@shared/types'
@@ -51,11 +51,41 @@ export function registerIpc(): void {
     return r.filePaths[0]
   })
 
+  // 目录选择对话框（数据根目录设置）
+  ipcMain.handle(IpcChannels.selectDirectory, async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const r = await dialog.showOpenDialog(win!, {
+      title: '选择数据根目录',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (r.canceled || r.filePaths.length === 0) return null
+    return r.filePaths[0]
+  })
+
   // 本地图片 -> data URL（绕过 renderer CSP 对 file:// 的限制）
   ipcMain.handle(IpcChannels.readImageDataUrl, (_e, path: string) => {
     const buf = readFileSync(path)
     const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp', '.avif': 'image/avif', '.tif': 'image/tiff', '.tiff': 'image/tiff' }[extname(path).toLowerCase()] ?? 'application/octet-stream'
     return `data:${mime};base64,${buf.toString('base64')}`
+  })
+
+  // 缩略图（JPEG data URL，带 mtime 缓存）：列表/缩略图场景避免全尺寸解码
+  const thumbCache = new Map<string, string>()
+  ipcMain.handle(IpcChannels.readImageThumb, (_e, path: string, maxDim = 320) => {
+    const key = `${path}:${statSync(path).mtimeMs}:${maxDim}`
+    const hit = thumbCache.get(key)
+    if (hit) return hit
+    const img = nativeImage.createFromPath(path)
+    if (img.isEmpty()) throw new Error(`无法解码图片: ${path}`)
+    const { width, height } = img.getSize()
+    const scale = maxDim / Math.max(width, height)
+    const thumb = scale < 1
+      ? img.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' })
+      : img
+    const url = `data:image/jpeg;base64,${thumb.toJPEG(85).toString('base64')}`
+    if (thumbCache.size >= 200) thumbCache.delete(thumbCache.keys().next().value!) // ponytail: FIFO 驱逐，项目图片量级足够
+    thumbCache.set(key, url)
+    return url
   })
 
   ipcMain.handle(IpcChannels.sidecarStatus, () => sidecarStatus())
