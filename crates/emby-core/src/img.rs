@@ -226,3 +226,48 @@ pub fn phash(path: String) -> napi::Result<String> {
     }
     Ok(bits)
 }
+
+/// 画布调整（设计师指定物理尺寸，单位 mm）：输出像素按 PX_PER_MM 与 mm 严格对齐，
+/// 使下游针迹生成的行距/补针有精确的物理基准。
+/// mode: "fit"（等比放入+底色补齐）| "fill"（等比覆盖+居中裁切）| "stretch"（拉伸）
+#[napi]
+pub fn canvas_resize(src: String, dst: String, width_mm: f64, height_mm: f64, mode: String) -> napi::Result<()> {
+    const PX_PER_MM: f64 = 4.0;
+    let img = image::open(&src).map_err(|e| napi::Error::from_reason(format!("无法读取图片 {src}: {e}")))?;
+    let out_w = ((width_mm * PX_PER_MM).round() as u32).clamp(8, 4000);
+    let out_h = ((height_mm * PX_PER_MM).round() as u32).clamp(8, 4000);
+
+    let rgb = img.to_rgb8();
+    let out = match mode.as_str() {
+        "stretch" => image::imageops::resize(&rgb, out_w, out_h, image::imageops::FilterType::Lanczos3),
+        "fill" => image::DynamicImage::ImageRgb8(rgb.clone()).resize_to_fill(out_w, out_h, image::imageops::FilterType::Lanczos3).to_rgb8(),
+        _ => {
+            // fit：等比缩到画布内，四周用边缘主色补齐
+            let fitted = image::imageops::resize(&rgb, out_w, out_h, image::imageops::FilterType::Lanczos3);
+            // fit 模式 resize 保持比例，可能小于画布 → 居中贴到背景上
+            let bg = dominant_border_color(&rgb);
+            let mut canvas = image::RgbImage::from_pixel(out_w, out_h, bg);
+            let (fx, fy) = ((out_w - fitted.width().min(out_w)) / 2, (out_h - fitted.height().min(out_h)) / 2);
+            image::imageops::overlay(&mut canvas, &fitted, fx as i64, fy as i64);
+            canvas
+        }
+    };
+    out.save(&dst).map_err(|e| napi::Error::from_reason(format!("无法写入 {dst}: {e}")))?;
+    Ok(())
+}
+
+/// 边缘主色（fit 补齐底色）：统计四边像素出现最多的颜色
+fn dominant_border_color(img: &image::RgbImage) -> image::Rgb<u8> {
+    use std::collections::HashMap;
+    let (w, h) = (img.width(), img.height());
+    let mut counts: HashMap<(u8, u8, u8), usize> = HashMap::new();
+    let raw = img.as_raw();
+    let mut tally = |x: u32, y: u32| {
+        let i = ((y * w + x) * 3) as usize;
+        *counts.entry((raw[i], raw[i + 1], raw[i + 2])).or_insert(0) += 1;
+    };
+    for x in 0..w { tally(x, 0); tally(x, h - 1); }
+    for y in 0..h { tally(0, y); tally(w - 1, y); }
+    let (r, g, b) = counts.into_iter().max_by_key(|(_, n)| *n).map(|(c, _)| c).unwrap_or((255, 255, 255));
+    image::Rgb([r, g, b])
+}
