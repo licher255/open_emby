@@ -1,49 +1,46 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CommitInfo, DigitizePlan, EngineProgressEvent, ProjectImage, ProjectInfo, StitchResult } from '@shared/types'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CommitInfo, DigitizePlan, EngineProgressEvent, ProjectImage, ProjectInfo, StitchPostProcess, StitchResult } from '@shared/types'
 import { toast } from '../stores/toast'
-import StitchPreview3D from '../components/StitchPreview3D'
+import LayerEditor from '../components/LayerEditor'
 import { localeTag, useT } from '../i18n'
 import type { LocaleKey } from '../i18n/en'
 import Icon, { type IconName } from '../components/Icon'
+import { useWorkbench, type StepId } from '../stores/workbench'
+import { useCanvasView } from '../hooks/useCanvasView'
 
-const STEP_KEY: Record<StepId, LocaleKey> = {
-  import: 'step.import',
-  stylize: 'step.stylize',
-  plan: 'step.plan',
-  stitches: 'step.stitches',
-  export: 'step.export'
+const StitchPreview3D = lazy(() => import('../components/StitchPreview3D'))
+
+const CANVAS_MODE_KEY: Record<'fit' | 'fill' | 'stretch', LocaleKey> = {
+  fit: 'canvas.mode.fit',
+  fill: 'canvas.mode.fill',
+  stretch: 'canvas.mode.stretch'
 }
 
-const STEP_ICON: Record<StepId, IconName> = {
-  import: 'image',
-  stylize: 'palette',
-  plan: 'clipboard-list',
-  stitches: 'route',
-  export: 'file-export'
-}
-
-/** 风格化工作流的固定节点（对应 main/services/engine.ts buildStylizeWorkflow），
- *  借鉴 ComfyUI 的节点执行高亮：pending → running → done / error */
+/** Stage 2：前处理后生成规整色域，线稿始终从同一张色域图提取。 */
 const FLOW_NODES = [
   { id: 'load', label: 'LoadImage' },
-  { id: 'stylize', label: 'EmbyColorBlockStylize' },
-  { id: 'lineart', label: 'EmbyLineArtExtract' },
-  { id: 'save', label: 'SaveImage·色块' },
+  { id: 'background', label: 'RemoveBG' },
+  { id: 'blocks', label: 'Stylize·ColorBlocks' },
+  { id: 'saveBlocks', label: 'SaveImage·色块' },
+  { id: 'lineart', label: 'LineArt' },
   { id: 'saveLine', label: 'SaveImage·线稿' }
 ] as const
 
 type NodeState = 'pending' | 'running' | 'done' | 'error'
-type StepId = 'import' | 'stylize' | 'plan' | 'stitches' | 'export'
 
 interface Props {
   project: ProjectInfo
   onProjectChanged: () => void
 }
 
-/** 步骤化工作台：左侧步骤轨（每步的状态与产物一目了然），右侧当前步骤的输入/输出槽。
+/** 步骤化工作台：步骤树在应用侧边栏（项目树下），此处是当前步骤的输入/输出槽。
  *  产物留在产生它的步骤里，不混入其他步骤。 */
 export default function Editor({ project, onProjectChanged }: Props) {
   const t = useT()
+  const activeStep = useWorkbench((s) => s.activeStep)
+  const historyOpen = useWorkbench((s) => s.historyOpen)
+  const setWbSteps = useWorkbench((s) => s.setSteps)
+  const setWbHistoryCount = useWorkbench((s) => s.setHistoryCount)
   const [images, setImages] = useState<ProjectImage[]>([])
   const [imagePath, setImagePath] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -51,7 +48,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const [stylizedPath, setStylizedPath] = useState<string | null>(null)
   const [lineArtUrl, setLineArtUrl] = useState<string | null>(null)
   const [lineArtPath, setLineArtPath] = useState<string | null>(null)
-  const [layerView, setLayerView] = useState<'blocks' | 'lineart' | 'overlay'>('overlay')
+  const [layerView, setLayerView] = useState<'blocks' | 'lineart' | 'overlay' | 'edit'>('overlay')
   const [plan, setPlan] = useState<DigitizePlan | null>(null)
   const [stitches, setStitches] = useState<StitchResult | null>(null)
   const [exportFiles, setExportFiles] = useState<string[] | null>(null)
@@ -63,9 +60,14 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const [nodeStates, setNodeStates] = useState<Record<string, NodeState>>({})
   const [nodePct, setNodePct] = useState<{ value: number; max: number } | null>(null)
   const [history, setHistory] = useState<CommitInfo[]>([])
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [activeStep, setActiveStep] = useState<StepId>('import')
+  const [refVisible, setRefVisible] = useState(true)
+  const [pastOutputsVisible, setPastOutputsVisible] = useState(true)
+  const [canvasMm, setCanvasMm] = useState<{ width: number; height: number } | null>(null)
+  const [canvasW, setCanvasW] = useState('100')
+  const [canvasH, setCanvasH] = useState('100')
+  const [canvasMode, setCanvasMode] = useState<'fit' | 'fill' | 'stretch'>('fit')
+  const [stitchPost, setStitchPost] = useState({ min: '0.6', max: '3.0', tolerance: '0.15' })
 
   const refreshImages = useCallback(async () => {
     setImages(await window.openEmby.projects.images(project.id))
@@ -93,6 +95,18 @@ export default function Editor({ project, onProjectChanged }: Props) {
     }
     if (s.plan) setPlan(s.plan)
     if (s.stitches) { setStitches(s.stitches); setProgress100(100) }
+    if (s.stitchPostProcess) {
+      setStitchPost({
+        min: String(s.stitchPostProcess.minStitchMm),
+        max: String(s.stitchPostProcess.maxStitchMm),
+        tolerance: String(s.stitchPostProcess.curveToleranceMm)
+      })
+    }
+    if (s.canvasMm) {
+      setCanvasMm(s.canvasMm)
+      setCanvasW(String(s.canvasMm.width))
+      setCanvasH(String(s.canvasMm.height))
+    }
   }, [project.id])
 
   useEffect(() => {
@@ -102,13 +116,15 @@ export default function Editor({ project, onProjectChanged }: Props) {
   }, [refreshImages, refreshHistory, restoreState])
 
   /** 保存工作台状态并留一个版本（Git 提交） */
-  const persist = useCallback(async (message: string, overrides: Partial<{ plan: DigitizePlan | null; stitches: StitchResult | null; stylizedPath: string | null; lineArtPath: string | null; imagePath: string | null }> = {}) => {
+  const persist = useCallback(async (message: string, overrides: Partial<{ plan: DigitizePlan | null; stitches: StitchResult | null; stylizedPath: string | null; lineArtPath: string | null; imagePath: string | null; canvasMm: { width: number; height: number } | null; stitchPostProcess: StitchPostProcess }> = {}) => {
     const state = {
       imagePath: overrides.imagePath !== undefined ? overrides.imagePath : imagePath,
       stylizedPath: overrides.stylizedPath !== undefined ? overrides.stylizedPath : stylizedPath,
       lineArtPath: overrides.lineArtPath !== undefined ? overrides.lineArtPath : lineArtPath,
+      canvasMm: overrides.canvasMm !== undefined ? overrides.canvasMm : canvasMm,
       plan: overrides.plan !== undefined ? overrides.plan : plan,
-      stitches: overrides.stitches !== undefined ? overrides.stitches : stitches
+      stitches: overrides.stitches !== undefined ? overrides.stitches : stitches,
+      stitchPostProcess: overrides.stitchPostProcess ?? getStitchPostProcess()
     }
     try {
       await window.openEmby.projects.saveState(project.id, state, message)
@@ -116,7 +132,39 @@ export default function Editor({ project, onProjectChanged }: Props) {
     } catch (e) {
       console.warn('状态保存失败', e)
     }
-  }, [project.id, imagePath, stylizedPath, lineArtPath, plan, stitches, refreshHistory])
+  }, [project.id, imagePath, stylizedPath, lineArtPath, canvasMm, plan, stitches, stitchPost, refreshHistory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function getStitchPostProcess(): StitchPostProcess {
+    const minStitchMm = Math.min(5, Math.max(0.1, Number(stitchPost.min) || 0.6))
+    return {
+      minStitchMm,
+      maxStitchMm: Math.min(12, Math.max(minStitchMm * 2, Number(stitchPost.max) || 3.0)),
+      curveToleranceMm: Math.min(2, Math.max(0.01, Number(stitchPost.tolerance) || 0.15))
+    }
+  }
+
+  /** 应用画布设置：Rust canvas_resize 产出新参考图，物理尺寸记入状态（决定针迹基准） */
+  async function applyCanvas() {
+    if (!imagePath) return
+    const w = Number(canvasW)
+    const h = Number(canvasH)
+    if (!(w > 0) || !(h > 0)) return
+    setBusy('import')
+    try {
+      const dest = await window.openEmby.projects.canvasAdjust(project.id, imagePath, w, h, canvasMode)
+      setCanvasMm({ width: w, height: h })
+      await refreshImages()
+      onProjectChanged()
+      await selectImage(dest)
+      setCanvasMm({ width: w, height: h }) // selectImage 不重置 canvasMm
+      toast.success(t('toast.canvasDone', { w, h }))
+      await persist(`Canvas ${w}×${h}mm (${canvasMode})`, { imagePath: dest, canvasMm: { width: w, height: h }, plan: null, stitches: null, stylizedPath: null, lineArtPath: null })
+    } catch (err) {
+      toast.error(t('toast.fail.canvas', { error: String(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
 
   useEffect(() => {
     const off = window.openEmby.engine.onProgress((ev: EngineProgressEvent) => {
@@ -131,7 +179,8 @@ export default function Editor({ project, onProjectChanged }: Props) {
         setProgress(`${label}…`)
       } else if (ev.type === 'progress' && ev.max) {
         setNodePct({ value: ev.value ?? 0, max: ev.max })
-        setProgress(`KMeans ${ev.value}/${ev.max}`)
+        const label = FLOW_NODES.find((n) => n.id === ev.nodeId)?.label ?? ev.nodeId ?? 'Processing'
+        setProgress(`${label} ${ev.value}/${ev.max}`)
       } else if (ev.type === 'executed' && ev.nodeId) {
         setNodeStates((prev) => ({ ...prev, [ev.nodeId!]: 'done' }))
       } else if (ev.type === 'error') {
@@ -160,6 +209,59 @@ export default function Editor({ project, onProjectChanged }: Props) {
     setNodePct(null)
   }
 
+  async function archiveAsset(img: ProjectImage) {
+    if (!window.confirm(t('editor.archiveConfirm', { name: img.name }))) return
+    try {
+      await window.openEmby.projects.archiveImage(project.id, img.path)
+      if (img.path === imagePath) {
+        const next = images.find((item) => item.path !== img.path && (item.kind === 'original' || item.kind === 'other'))
+        if (next) {
+          await selectImage(next.path)
+        } else {
+          setImagePath(null); setImageUrl(null); setStylizedPath(null); setStylizedUrl(null); setLineArtPath(null); setLineArtUrl(null)
+          setPlan(null); setStitches(null); setExportFiles(null)
+        }
+        await persist(`Archive image ${img.name}`, {
+          imagePath: next?.path ?? null,
+          stylizedPath: null,
+          lineArtPath: null,
+          plan: null,
+          stitches: null
+        })
+      } else if (img.path === stylizedPath) {
+        setStylizedPath(null); setStylizedUrl(null); setLineArtPath(null); setLineArtUrl(null)
+        await persist(`Archive image ${img.name}`, { stylizedPath: null, lineArtPath: null, stitches: null })
+      } else if (img.path === lineArtPath) {
+        setLineArtPath(null); setLineArtUrl(null)
+        await persist(`Archive image ${img.name}`, { lineArtPath: null, stitches: null })
+      }
+      await refreshImages()
+      onProjectChanged()
+      toast.success(t('toast.archived'))
+    } catch (err) {
+      toast.error(t('toast.fail.archive', { error: String(err) }))
+    }
+  }
+
+  async function renameAsset(img: ProjectImage) {
+    const dot = img.name.lastIndexOf('.')
+    const currentName = dot > 0 ? img.name.slice(0, dot) : img.name
+    const name = window.prompt(t('editor.renamePrompt'), currentName)
+    if (name == null || name.trim() === '' || name.trim() === currentName) return
+    try {
+      const renamedPath = await window.openEmby.projects.renameImage(project.id, img.path, name)
+      if (img.path === imagePath) setImagePath(renamedPath)
+      if (img.path === stylizedPath) setStylizedPath(renamedPath)
+      if (img.path === lineArtPath) setLineArtPath(renamedPath)
+      await refreshImages()
+      await refreshHistory()
+      onProjectChanged()
+      toast.success(t('toast.renamed'))
+    } catch (err) {
+      toast.error(t('toast.fail.rename', { error: String(err) }))
+    }
+  }
+
   /** 导入图稿到项目（复制进项目目录） */
   async function importIntoProject(srcPath: string) {
     setBusy('import')
@@ -169,7 +271,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       onProjectChanged()
       await selectImage(dest)
       toast.success(t('toast.imported'))
-      await persist('Import artwork', { imagePath: dest, plan: null, stitches: null, stylizedPath: null })
+      await persist('Import artwork', { imagePath: dest, plan: null, stitches: null, stylizedPath: null, lineArtPath: null })
     } catch (err) {
       toast.error(t('toast.fail.import', { error: String(err) }))
     } finally {
@@ -194,31 +296,79 @@ export default function Editor({ project, onProjectChanged }: Props) {
     }
   }
 
-  async function stylize() {
+  async function generateStage2() {
     if (!imagePath) return
-    setBusy('stylize'); setProgress('')
+    setBusy('stage2'); setProgress('')
     setNodeStates(Object.fromEntries(FLOW_NODES.map((n) => [n.id, 'pending'])))
     setNodePct(null)
     try {
-      const result = await window.openEmby.engine.stylize(imagePath, plan?.maxColors ?? 8)
-      setStylizedUrl(result.colorBlocks)
-      setLineArtUrl(result.lineArt)
+      const srcName = imagePath.split(/[\\/]/).pop()
+      const blocks = await window.openEmby.engine.generateColorBlocks(imagePath, null, plan?.maxColors ?? 8)
+      const savedBlocks = await window.openEmby.projects.saveImage(project.id, blocks, 'stylized', 'stylized', srcName)
+      setStylizedUrl(blocks)
+      setStylizedPath(savedBlocks)
+      const lineArt = await window.openEmby.engine.generateLineArt(savedBlocks)
+      const savedLine = await window.openEmby.projects.saveImage(project.id, lineArt, 'lineart', 'lineart', srcName)
+      setLineArtUrl(lineArt)
+      setLineArtPath(savedLine)
       setNodeStates(Object.fromEntries(FLOW_NODES.map((n) => [n.id, 'done'])))
       setProgress('')
-      // 双层产出存回项目，记录来源谱系
-      const srcName = imagePath.split(/[\\/]/).pop()
-      const saved = await window.openEmby.projects.saveImage(project.id, result.colorBlocks, 'stylized', 'stylized', srcName)
-      const savedLine = await window.openEmby.projects.saveImage(project.id, result.lineArt, 'lineart', 'lineart', srcName)
-      setStylizedPath(saved)
-      setLineArtPath(savedLine)
       setStitches(null)
       setExportFiles(null)
       await refreshImages()
       onProjectChanged()
       toast.success(t('toast.stylizeDone'))
-      await persist('Stylize · color blocks + line art', { stylizedPath: saved, lineArtPath: savedLine, stitches: null })
+      await persist('Stage 2 · color blocks + line art', { stylizedPath: savedBlocks, lineArtPath: savedLine, stitches: null })
     } catch (err) {
       toast.error(t('toast.fail.stylize', { error: String(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function regenerateColorBlocks() {
+    if (!imagePath) return
+    setBusy('blocks'); setProgress('')
+    setNodeStates({ load: 'pending', background: 'pending', blocks: 'pending', saveBlocks: 'pending', lineart: 'done', saveLine: 'done' })
+    setNodePct(null)
+    try {
+      const blocks = await window.openEmby.engine.generateColorBlocks(imagePath, lineArtPath, plan?.maxColors ?? 8)
+      const srcName = imagePath.split(/[\\/]/).pop()
+      const savedBlocks = await window.openEmby.projects.saveImage(project.id, blocks, 'stylized', 'stylized', srcName)
+      setStylizedUrl(blocks)
+      setStylizedPath(savedBlocks)
+      setStitches(null)
+      setExportFiles(null)
+      await refreshImages()
+      onProjectChanged()
+      toast.success(t('toast.blocksDone'))
+      await persist('Regenerate color blocks from line art', { stylizedPath: savedBlocks, stitches: null })
+    } catch (err) {
+      toast.error(t('toast.fail.blocks', { error: String(err) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function regenerateLineArt() {
+    if (!stylizedPath) return
+    setBusy('lineart'); setProgress('')
+    setNodeStates({ load: 'done', background: 'done', blocks: 'done', saveBlocks: 'done', lineart: 'pending', saveLine: 'pending' })
+    setNodePct(null)
+    try {
+      const lineArt = await window.openEmby.engine.generateLineArt(stylizedPath)
+      const srcName = stylizedPath.split(/[\\/]/).pop()
+      const savedLine = await window.openEmby.projects.saveImage(project.id, lineArt, 'lineart', 'lineart', srcName)
+      setLineArtUrl(lineArt)
+      setLineArtPath(savedLine)
+      setStitches(null)
+      setExportFiles(null)
+      await refreshImages()
+      onProjectChanged()
+      toast.success(t('toast.lineArtDone'))
+      await persist('Regenerate line art', { lineArtPath: savedLine, stitches: null })
+    } catch (err) {
+      toast.error(t('toast.fail.lineArt', { error: String(err) }))
     } finally {
       setBusy(null)
     }
@@ -228,7 +378,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
     if (!imagePath) return
     setBusy('plan')
     try {
-      const p = await window.openEmby.sidecar.digitizePlan(imagePath, '')
+      const p = await window.openEmby.sidecar.digitizePlan(imagePath, '', canvasMm?.width ?? 100)
       setPlan(p)
       toast.success(t('toast.planDone'))
       await persist('Build digitizing plan', { plan: p })
@@ -245,12 +395,13 @@ export default function Editor({ project, onProjectChanged }: Props) {
     if (!src) return
     setBusy('stitch'); setExportFiles(null)
     try {
-      const result = await window.openEmby.sidecar.digitizeStitches(src, plan?.maxColors ?? 8, plan?.sizeMm.width ?? 100)
+      const postProcess = getStitchPostProcess()
+      const result = await window.openEmby.sidecar.digitizeStitches(src, plan?.maxColors ?? 8, canvasMm?.width ?? plan?.sizeMm.width ?? 100, postProcess)
       setStitches(result)
       setProgress100(100)
       setHiddenLayers(new Set())
       toast.success(t('toast.stitchDone', { stitches: result.stitchCount.toLocaleString(), changes: result.colorChanges }))
-      await persist(`Generate stitches (${result.stitchCount} stitches)`, { stitches: result })
+      await persist(`Generate stitches (${result.stitchCount} stitches)`, { stitches: result, stitchPostProcess: postProcess })
     } catch (err) {
       toast.error(t('toast.fail.stitch', { error: String(err) }))
     } finally {
@@ -326,42 +477,22 @@ export default function Editor({ project, onProjectChanged }: Props) {
   /** 步骤定义：产物摘要显示在步骤行上（产物留在自己的槽里） */
   const steps: Array<{ id: StepId; done: boolean; artifact: string }> = [
     { id: 'import', done: !!imagePath, artifact: imagePath ? (imagePath.split(/[\\/]/).pop() ?? '') : '' },
-    { id: 'stylize', done: !!stylizedPath, artifact: stylizedPath ? (stylizedPath.split(/[\\/]/).pop() ?? '') : '' },
+    { id: 'stylize', done: !!stylizedPath && !!lineArtPath, artifact: stylizedPath && lineArtPath ? t('editor.twoLayers') : '' },
     { id: 'plan', done: !!plan, artifact: plan ? `${plan.palette.length} colors` : '' },
     { id: 'stitches', done: !!stitches, artifact: stitches ? `${stitches.stitchCount.toLocaleString()} st` : '' },
     { id: 'export', done: !!exportFiles, artifact: exportFiles ? `${exportFiles.length} files` : '' }
   ]
 
+  // 发布步骤树到共享 store（App 侧边栏项目树下渲染）
+  useEffect(() => { setWbSteps(steps) }, [imagePath, stylizedPath, plan, stitches, exportFiles, setWbSteps]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setWbHistoryCount(history.length) }, [history.length, setWbHistoryCount])
+
   const originals = images.filter((i) => i.kind === 'original' || i.kind === 'other')
-  const stylizedAssets = images.filter((i) => i.kind === 'stylized')
+  const stage2Assets = images.filter((i) => i.kind === 'stylized' || i.kind === 'lineart')
+  const stage2Busy = busy === 'stage2' || busy === 'blocks' || busy === 'lineart'
 
   return (
     <div className="workbench">
-      {/* 左侧步骤轨（项目树）：步骤 + 状态 + 产物摘要 */}
-      <aside className="step-rail">
-        <div className="step-rail-title">{project.name}</div>
-        {steps.map((s, i) => (
-          <button
-            key={s.id}
-            className={`step-item ${activeStep === s.id ? 'active' : ''} ${s.done ? 'done' : ''}`}
-            onClick={() => setActiveStep(s.id)}
-          >
-            <span className="step-num">{s.done ? '✓' : <Icon name={STEP_ICON[s.id]} size={11} />}</span>
-            <span className="step-body">
-              <span className="step-name">{t(STEP_KEY[s.id])}</span>
-              {s.artifact && <span className="step-artifact">{s.artifact}</span>}
-            </span>
-          </button>
-        ))}
-        <div className="step-rail-foot">
-          <button className="step-item plain" onClick={() => setHistoryOpen(!historyOpen)}>
-            <Icon name="clock-rotate-left" />
-            <span className="step-name">{t('history.title')}</span>
-            <span className="step-artifact">{history.length}</span>
-          </button>
-        </div>
-      </aside>
-
       {/* 右侧：当前步骤的输入/输出槽 */}
       <section className="step-content">
         {activeStep === 'import' && (
@@ -379,103 +510,218 @@ export default function Editor({ project, onProjectChanged }: Props) {
               <span className="asset-hint">{t('editor.dropHint')}</span>
             </div>
             <h3>{t('editor.output')}</h3>
-            <div className="thumb-grid">
+            <div className="thumb-strip">
               {originals.map((img) => (
-                <button
-                  key={img.path}
-                  className={`thumb-cell ${img.path === imagePath ? 'active' : ''}`}
-                  onClick={() => selectImage(img.path)}
-                  title={img.name}
-                >
-                  <AssetThumb path={img.path} />
-                  <span className="thumb-name">{img.name}</span>
-                </button>
+                <div key={img.path} className={`thumb-cell ${img.path === imagePath ? 'active' : ''}`}>
+                  <button className="thumb-select" onClick={() => selectImage(img.path)} title={img.name}>
+                    <AssetThumb path={img.path} />
+                    <span className="thumb-name">{img.name}</span>
+                  </button>
+                  <button className="thumb-rename" onClick={() => renameAsset(img)} title={t('editor.rename')} aria-label={t('editor.rename')}>
+                    <Icon name="pen-nib" size={12} />
+                  </button>
+                  <button className="thumb-archive" onClick={() => archiveAsset(img)} title={t('editor.archive')} aria-label={t('editor.archive')}>
+                    <Icon name="trash-can" size={12} />
+                  </button>
+                </div>
               ))}
               {originals.length === 0 && <p className="mono-meta">{t('editor.noReference')}</p>}
             </div>
+
+            {/* 画布修改器：物理尺寸（mm）直接决定下游针迹行距与补针基准 */}
+            {imagePath && (
+              <div className="slot canvas-slot">
+                <h3>{t('canvas.title')}</h3>
+                <div className="canvas-row">
+                  <label>
+                    {t('canvas.width')}
+                    <input type="number" min={1} value={canvasW} onChange={(e) => setCanvasW(e.target.value)} />
+                  </label>
+                  <span className="canvas-x">×</span>
+                  <label>
+                    {t('canvas.height')}
+                    <input type="number" min={1} value={canvasH} onChange={(e) => setCanvasH(e.target.value)} />
+                  </label>
+                  <span className="canvas-x">mm</span>
+                  <div className="view-tabs" style={{ marginBottom: 0 }}>
+                    {(['fit', 'fill', 'stretch'] as const).map((m) => (
+                      <button key={m} className={canvasMode === m ? 'active' : ''} onClick={() => setCanvasMode(m)}>
+                        {t(CANVAS_MODE_KEY[m])}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="btn-pill btn-sm-pill" disabled={busy === 'import'} onClick={applyCanvas}>
+                    {t('canvas.apply')}
+                  </button>
+                </div>
+                {canvasMm && (
+                  <p className="mono-meta">{t('canvas.current', { w: canvasMm.width, h: canvasMm.height })}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {activeStep === 'stylize' && (
-          <div className="step-panel">
-            <h1>{t('step.stylize')}</h1>
-            <div className="io-grid">
-              <div className="pane">
-                <h3>{t('editor.input')}</h3>
-                <div className="img-frame">
-                  {imageUrl
-                    ? <img src={imageUrl} alt="input" />
-                    : <div className="img-placeholder">{t('editor.noInput')}</div>}
-                </div>
-              </div>
-              <div className="pane">
-                <h3>{t('editor.output')}</h3>
-                {(stylizedUrl || busy === 'stylize') && (
-                  <div className="view-tabs" style={{ marginBottom: 6 }}>
-                    <button className={layerView === 'blocks' ? 'active' : ''} onClick={() => setLayerView('blocks')}>{t('editor.layerBlocks')}</button>
-                    <button className={layerView === 'lineart' ? 'active' : ''} onClick={() => setLayerView('lineart')}>{t('editor.layerLineart')}</button>
-                    <button className={layerView === 'overlay' ? 'active' : ''} onClick={() => setLayerView('overlay')}>{t('editor.layerOverlay')}</button>
-                  </div>
-                )}
-                <div className="img-frame">
-                  {stylizedUrl ? (
-                    layerView === 'blocks' ? <img src={stylizedUrl} alt="color blocks" />
-                    : layerView === 'lineart' && lineArtUrl ? <img src={lineArtUrl} alt="line art" />
-                    : (
-                      <div className="layer-stack">
-                        <img src={stylizedUrl} alt="color blocks" />
-                        {lineArtUrl && <img src={lineArtUrl} alt="line art" className="layer-lineart" />}
+          <div className="step-panel fill">
+            <div className="ws">
+              <div className="ws-canvas">
+                {layerView === 'edit' && stylizedUrl ? (
+                  <LayerEditor
+                    blocksUrl={stylizedUrl}
+                    lineArtUrl={lineArtUrl}
+                    onSave={async (blocks, line) => {
+                      const srcName = imagePath?.split(/[\\/]/).pop()
+                      const saved = await window.openEmby.projects.saveImage(project.id, blocks, 'stylized', 'stylized', srcName)
+                      let savedLine = lineArtPath
+                      if (line) savedLine = await window.openEmby.projects.saveImage(project.id, line, 'lineart', 'lineart', srcName)
+                      setStylizedUrl(blocks)
+                      setStylizedPath(saved)
+                      if (line && savedLine) { setLineArtUrl(line); setLineArtPath(savedLine) }
+                      setStitches(null)
+                      setExportFiles(null)
+                      await refreshImages()
+                      onProjectChanged()
+                      toast.success(t('toast.refineDone'))
+                      await persist('Refine layers', { stylizedPath: saved, lineArtPath: savedLine, stitches: null })
+                      setLayerView('overlay')
+                    }}
+                  />
+                ) : (
+                  <div className="ws-stage">
+                    {stage2Busy ? (
+                      <div className="ws-progress">
+                        <div className="progress-track" style={{ width: 260 }}>
+                          {nodePct
+                            ? <div className="progress-fill" style={{ width: `${Math.round((nodePct.value / nodePct.max) * 100)}%` }} />
+                            : <div className="progress-fill indeterminate" />}
+                        </div>
+                        <p className="mono-meta">{progress || t('editor.generating')}</p>
+                        <div className="flow-strip" style={{ background: 'transparent', border: 'none' }}>
+                          {FLOW_NODES.map((n, i) => (
+                            <span key={n.id} className="flow-item">
+                              {i > 0 && <span className="flow-arrow">→</span>}
+                              <span className={`flow-node ${nodeStates[n.id] ?? 'pending'}`}>{n.label}</span>
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    )
-                  ) : (
-                    <div className="img-placeholder">{busy === 'stylize' ? progress || t('editor.generating') : t('editor.notGenerated')}</div>
-                  )}
-                </div>
-                {busy === 'stylize' && (
-                  <div className="progress-track">
-                    {nodePct
-                      ? <div className="progress-fill" style={{ width: `${Math.round((nodePct.value / nodePct.max) * 100)}%` }} />
-                      : <div className="progress-fill indeterminate" />}
+                    ) : stylizedUrl && layerView === 'blocks' ? (
+                      <PanZoomStage url={stylizedUrl} />
+                    ) : layerView === 'lineart' && lineArtUrl ? (
+                      <PanZoomStage url={lineArtUrl} />
+                    ) : stylizedUrl ? (
+                      <PanZoomStage url={stylizedUrl} lineUrl={lineArtUrl} overlay />
+                    ) : (
+                      <div className="ws-empty">
+                        {imageUrl ? <img src={imageUrl} alt="input" /> : <Icon name="image" size={44} />}
+                        <p>{imageUrl ? t('editor.readyToStylize') : t('editor.noInput')}</p>
+                        <button className="btn-pill" disabled={!imagePath} onClick={generateStage2}>{t('editor.stylize')}</button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            </div>
-            {(busy === 'stylize' || Object.keys(nodeStates).length > 0) && (
-              <div className="flow-strip">
-                {FLOW_NODES.map((n, i) => (
-                  <span key={n.id} className="flow-item">
-                    {i > 0 && <span className="flow-arrow">→</span>}
-                    <span className={`flow-node ${nodeStates[n.id] ?? 'pending'}`}>{n.label}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="editor-actions">
-              <button className="btn-pill" disabled={!!busy || !imagePath} onClick={stylize}>
-                {busy === 'stylize' ? t('editor.stylizing') : t('editor.stylize')}
-              </button>
-            </div>
-            {stylizedAssets.length > 0 && (
-              <>
-                <h3>{t('editor.pastOutputs')}</h3>
-                <div className="thumb-grid">
-                  {stylizedAssets.map((img) => (
-                    <button
-                      key={img.path}
-                      className={`thumb-cell ${img.path === stylizedPath ? 'active' : ''}`}
-                      onClick={async () => {
-                        setStylizedPath(img.path)
-                        setStylizedUrl(await window.openEmby.files.readImageDataUrl(img.path))
-                      }}
-                      title={img.derivedFrom ? `${img.name} ← ${img.derivedFrom}` : img.name}
-                    >
-                      <AssetThumb path={img.path} />
-                      <span className="thumb-name">{img.name}</span>
+
+                {!stage2Busy && stylizedUrl && layerView !== 'edit' && (
+                  <div className="ws-topbar">
+                    <div className="view-tabs" style={{ marginBottom: 0 }}>
+                      <button className={layerView === 'blocks' ? 'active' : ''} onClick={() => setLayerView('blocks')}>{t('editor.layerBlocks')}</button>
+                      <button className={layerView === 'lineart' ? 'active' : ''} onClick={() => setLayerView('lineart')}>{t('editor.layerLineart')}</button>
+                      <button className={layerView === 'overlay' ? 'active' : ''} onClick={() => setLayerView('overlay')}>{t('editor.layerOverlay')}</button>
+                    </div>
+                    <span className="le-sep" />
+                    <button className="le-tool" data-tip={t('refine.open')} onClick={() => setLayerView('edit')}><Icon name="pen-nib" /></button>
+                    <button className="ws-action" data-tip={t('editor.regenerateLineArt')} onClick={regenerateLineArt} disabled={!!busy || !stylizedPath}>
+                      <Icon name="pen-nib" /><span>{t('editor.lineArtShort')}</span>
                     </button>
-                  ))}
+                    <button className="ws-action" data-tip={t('editor.regenerateBlocks')} onClick={regenerateColorBlocks} disabled={!!busy || !imagePath}>
+                      <Icon name="fill-drip" /><span>{t('editor.blocksShort')}</span>
+                    </button>
+                  </div>
+                )}
+
+                {layerView !== 'edit' && stage2Assets.length > 0 && (
+                  <div className={`ws-gallery ${pastOutputsVisible ? '' : 'collapsed'}`}>
+                    <div className="ws-gallery-head">
+                      <span><Icon name="image" /> {t('editor.pastOutputs')}</span>
+                      <button
+                        className="le-tool"
+                        data-tip={t(pastOutputsVisible ? 'editor.hidePastOutputs' : 'editor.showPastOutputs')}
+                        aria-expanded={pastOutputsVisible}
+                        onClick={() => setPastOutputsVisible((visible) => !visible)}
+                      >
+                        <Icon name={pastOutputsVisible ? 'eye-slash' : 'eye'} />
+                      </button>
+                    </div>
+                    {pastOutputsVisible && (
+                      <div className="ws-gallery-strip">
+                        {stage2Assets.map((img) => (
+                          <div key={img.path} className="ws-gallery-card">
+                            <button
+                              className={`ws-gallery-item ${(img.kind === 'stylized' ? img.path === stylizedPath : img.path === lineArtPath) ? 'active' : ''}`}
+                              onClick={async () => {
+                                if (img.kind === 'lineart') {
+                                  setLineArtPath(img.path)
+                                  setLineArtUrl(await window.openEmby.files.readImageDataUrl(img.path))
+                                  setLayerView('lineart')
+                                } else {
+                                  setStylizedPath(img.path)
+                                  setStylizedUrl(await window.openEmby.files.readImageDataUrl(img.path))
+                                  setLayerView('blocks')
+                                }
+                              }}
+                              title={img.derivedFrom ? `${img.name} ← ${img.derivedFrom}` : img.name}
+                            >
+                              <AssetThumb path={img.path} />
+                              <span>{img.kind === 'lineart' ? `${t('editor.layerLineart')} · ` : ''}{img.name}</span>
+                            </button>
+                            <button className="ws-gallery-rename" onClick={() => renameAsset(img)} title={t('editor.rename')} aria-label={t('editor.rename')}>
+                              <Icon name="pen-nib" size={11} />
+                            </button>
+                            <button className="ws-gallery-archive" onClick={() => archiveAsset(img)} title={t('editor.archive')} aria-label={t('editor.archive')}>
+                              <Icon name="trash-can" size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {layerView !== 'edit' && imageUrl && refVisible && (
+                  <div className="ws-ref">
+                    <img src={imageUrl} alt="reference" />
+                    <button className="ws-ref-close" onClick={() => setRefVisible(false)}>×</button>
+                  </div>
+                )}
+                {layerView !== 'edit' && !refVisible && imageUrl && (
+                  <button className="ws-ref-toggle le-tool" data-tip={t('editor.input')} onClick={() => setRefVisible(true)}><Icon name="eye" /></button>
+                )}
+              </div>
+
+              {historyOpen && layerView !== 'edit' && (
+                <div className="ws-history card">
+                  <h2>{t('history.title')}<button className="ws-ref-close" onClick={() => useWorkbench.getState().setHistoryOpen(false)}>×</button></h2>
+                  <div className="history-list">
+                    {history.map((c) => (
+                      <div key={c.oid} className="history-row">
+                        <code className="history-oid">{c.oid.slice(0, 7)}</code>
+                        <span className="history-msg">{c.message}</span>
+                        <button className="btn-outline btn-sm" onClick={async () => {
+                          if (!window.confirm(t('history.confirm', { message: c.message }))) return
+                          try {
+                            await window.openEmby.projects.restore(project.id, c.oid)
+                            await refreshImages(); await refreshHistory(); await restoreState(); onProjectChanged()
+                            toast.success(t('toast.restored'))
+                          } catch (e) { toast.error(t('toast.fail.restore', { error: String(e) })) }
+                        }}>{t('history.restore')}</button>
+                      </div>
+                    ))}
+                    {history.length === 0 && <p className="mono-meta">{t('history.empty')}</p>}
+                  </div>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         )}
 
@@ -521,6 +767,25 @@ export default function Editor({ project, onProjectChanged }: Props) {
         {activeStep === 'stitches' && (
           <div className="step-panel">
             <h1>{t('step.stitches')}</h1>
+            <div className="stitch-post-controls">
+              <strong>{t('stitch.postProcess')}</strong>
+              <label>
+                {t('stitch.minLength')}
+                <input type="number" min={0.1} max={5} step={0.1} value={stitchPost.min} onChange={(e) => setStitchPost((value) => ({ ...value, min: e.target.value }))} />
+                <span>mm</span>
+              </label>
+              <label>
+                {t('stitch.maxLength')}
+                <input type="number" min={Math.max(0.2, (Number(stitchPost.min) || 0.1) * 2)} max={12} step={0.1} value={stitchPost.max} onChange={(e) => setStitchPost((value) => ({ ...value, max: e.target.value }))} />
+                <span>mm</span>
+              </label>
+              <label>
+                {t('stitch.curveTolerance')}
+                <input type="number" min={0.01} max={2} step={0.05} value={stitchPost.tolerance} onChange={(e) => setStitchPost((value) => ({ ...value, tolerance: e.target.value }))} />
+                <span>mm</span>
+              </label>
+            </div>
+            <p className="mono-meta stitch-post-hint">{t('stitch.postProcessHint')}</p>
             <div className="editor-actions">
               <button className="btn-pill" disabled={!!busy || (!stylizedPath && !imagePath)} onClick={makeStitches}>
                 {busy === 'stitch' ? t('editor.stitching') : t('editor.stitch')}
@@ -539,7 +804,9 @@ export default function Editor({ project, onProjectChanged }: Props) {
                         <button className={view3d ? 'active' : ''} onClick={() => setView3d(true)}>{t('stitch.view3d')}</button>
                       </div>
                       {view3d ? (
-                        <StitchPreview3D stitches={stitches} hidden={hiddenLayers} />
+                        <Suspense fallback={<div className="stitch-3d mono-meta">{t('settings.loading')}</div>}>
+                          <StitchPreview3D stitches={stitches} hidden={hiddenLayers} />
+                        </Suspense>
                       ) : (
                         <>
                           <StitchPreview stitches={stitches} progress={progress100 / 100} hidden={hiddenLayers} />
@@ -608,7 +875,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
           </div>
         )}
 
-        {historyOpen && (
+        {historyOpen && activeStep !== 'stylize' && (
           <div className="card">
             <h2>{t('history.title')} <span className="mono-meta" style={{ marginLeft: 8 }}>{t('history.count', { count: history.length })}</span></h2>
             <div className="history-list">
@@ -653,6 +920,39 @@ function AssetThumb({ path }: { path: string }) {
     return () => { alive = false }
   }, [path])
   return url ? <img src={url} alt="" /> : <span className="asset-loading">…</span>
+}
+
+/** 自由画布预览：默认居中适配；拖拽平移、滚轮/双指捏合缩放（鼠标/触屏/Pencil 统一） */
+function PanZoomStage({ url, lineUrl, overlay }: { url: string; lineUrl?: string | null; overlay?: boolean }) {
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
+  const cv = useCanvasView()
+
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => setNat({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = url
+  }, [url])
+
+  // 内容就绪后居中适配
+  useEffect(() => { if (nat) cv.fit(nat.w, nat.h) }, [nat]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div ref={cv.ref} className="ws-panzoom" style={{ touchAction: 'none' }} {...cv.panHandlers}>
+      {nat && (
+        <div
+          className="ws-pan-stage"
+          style={{
+            width: nat.w,
+            height: nat.h,
+            transform: `translate(${cv.view.tx}px, ${cv.view.ty}px) scale(${cv.view.scale})`
+          }}
+        >
+          <img className="ws-pan-img" src={url} alt="" draggable={false} />
+          {overlay && lineUrl && <img className="ws-pan-img layer-lineart" src={lineUrl} alt="" draggable={false} />}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** 针迹仿真：按绣制顺序把针迹点画成彩色折线（跳针与换色不落笔）。

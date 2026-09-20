@@ -23,7 +23,7 @@ export const en = {
 
   // ---- 编辑器：阶段 ----
   'step.import': 'Import artwork',
-  'step.stylize': 'Stylize · color blocks',
+  'step.stylize': 'Line art & color blocks',
   'step.plan': 'Digitizing plan',
   'step.stitches': 'Stitches & preview',
   'step.export': 'Export files',
@@ -32,11 +32,63 @@ export const en = {
   'editor.input': 'Input',
   'editor.output': 'Output',
   'editor.noInput': 'Pick a reference image in step 1 first',
+  'editor.readyToStylize': 'Reference ready — generate editable color and line layers',
   'editor.noReference': 'No reference images yet',
   'editor.pastOutputs': 'Past outputs',
+  'editor.hidePastOutputs': 'Hide past outputs',
+  'editor.showPastOutputs': 'Show past outputs',
+  'editor.archive': 'Archive',
+  'editor.archiveConfirm': 'Archive "{name}"? The file is kept in the project and Git history.',
+  'editor.rename': 'Rename',
+  'editor.renamePrompt': 'New artwork name (the file extension is preserved)',
   'editor.layerBlocks': 'Color blocks',
   'editor.layerLineart': 'Line art',
   'editor.layerOverlay': 'Overlay',
+  'editor.regenerateLineArt': 'Regenerate line art from current color blocks',
+  'editor.regenerateBlocks': 'Regenerate color blocks using the adjusted line art',
+  'editor.lineArtShort': 'Line art',
+  'editor.blocksShort': 'Color blocks',
+  'editor.twoLayers': '2 layers',
+
+  // ---- 画布修改器（步骤 1） ----
+  'canvas.title': 'Canvas (physical size)',
+  'canvas.width': 'Width',
+  'canvas.height': 'Height',
+  'canvas.mode.fit': 'Fit',
+  'canvas.mode.fill': 'Fill',
+  'canvas.mode.stretch': 'Stretch',
+  'canvas.apply': 'Apply canvas',
+  'canvas.current': 'Current canvas: {w} × {h} mm — drives stitch spacing and underlay scale',
+
+  // ---- 精修编辑器（步骤 2） ----
+  'refine.title': 'Refine layers',
+  'refine.open': 'Refine',
+  'refine.tool.marquee': 'Marquee',
+  'refine.tool.pan': 'Hand · pan canvas',
+  'refine.tool.pen': 'Pen',
+  'refine.tool.fill': 'Fill region',
+  'refine.tool.eraser': 'Eraser',
+  'refine.brushSize': 'Brush size',
+  'refine.apply': 'Apply edits',
+  'refine.hint.marquee': 'Drag to select a region, then pick a palette color to fill it',
+  'refine.hint.pen': 'Draw on the line-art layer',
+  'refine.hint.fill': 'Click a color block to recolor it with the selected palette color',
+  'refine.undo': 'Undo',
+  'refine.zoomIn': 'Zoom in',
+  'refine.zoomOut': 'Zoom out',
+  'refine.zoomFit': 'Fit',
+
+  // ---- 图层 ----
+  'layers.title': 'Layers',
+  'layers.colorBase': 'Color base',
+  'layers.lineBase': 'Line art',
+  'layers.newFillName': 'Fill layer {count}',
+  'layers.newLineName': 'Line layer {count}',
+  'layers.addFill': 'Add fill layer',
+  'layers.addLine': 'Add line layer',
+  'layers.show': 'Show layer',
+  'layers.hide': 'Hide layer',
+  'layers.delete': 'Delete layer',
 
   // ---- 编辑器：图稿库 ----
   'editor.importImage': '+ Import artwork',
@@ -52,7 +104,7 @@ export const en = {
   'editor.engineNote': 'emby-engine · EmbyColorBlockStylize (saved to project)',
 
   // ---- 编辑器：操作 ----
-  'editor.stylize': '1. Stylize · split color blocks',
+  'editor.stylize': 'Generate line art + color blocks',
   'editor.stylizing': 'Generating…',
   'editor.plan': '2. Build digitizing plan',
   'editor.planning': 'Analyzing…',
@@ -70,6 +122,11 @@ export const en = {
 
   // ---- 针迹卡片 ----
   'stitch.title': 'Stitch simulation · checks & layers',
+  'stitch.postProcess': 'Machine path constraints',
+  'stitch.minLength': 'Minimum stitch',
+  'stitch.maxLength': 'Maximum stitch',
+  'stitch.curveTolerance': 'Curve error',
+  'stitch.postProcessHint': 'Curves are simplified to straight segments; short and crowded stitches are removed before export.',
   'stitch.view2d': '2D Simulation',
   'stitch.view3d': '3D Preview',
   'stitch.checks': 'Checks',
@@ -103,17 +160,29 @@ export const en = {
   // ---- Toast ----
   'toast.imported': 'Artwork imported into project',
   'toast.stylizeDone': 'Stylization done — saved to project assets',
+  'toast.blocksDone': 'Color blocks regenerated from the current line art',
+  'toast.lineArtDone': 'Line art regenerated from the current color blocks',
   'toast.planDone': 'Digitizing plan ready',
   'toast.stitchDone': 'Stitches generated: {stitches} stitches / {changes} color changes',
   'toast.exportDone': 'DST and production sheet exported',
   'toast.restored': 'Restored (previous state was auto-saved)',
+  'toast.archived': 'Image archived',
+  'toast.renamed': 'Image renamed',
   'toast.fail.import': 'Import failed: {error}',
   'toast.fail.drop': 'Could not read the dropped file',
   'toast.fail.stylize': 'Stylization failed: {error} (check emby-engine in Settings & Environment)',
+  'toast.fail.blocks': 'Color-block generation failed: {error}',
+  'toast.fail.lineArt': 'Line-art generation failed: {error}',
   'toast.fail.plan': 'Plan failed: {error}',
   'toast.fail.stitch': 'Stitch generation failed: {error}',
   'toast.fail.export': 'Export failed: {error}',
   'toast.fail.restore': 'Restore failed: {error}',
+  'toast.fail.archive': 'Archive failed: {error}',
+  'toast.fail.rename': 'Rename failed: {error}',
+  'toast.canvasDone': 'Canvas set to {w} × {h} mm',
+  'toast.fail.canvas': 'Canvas adjust failed: {error}',
+  'toast.refineDone': 'Edits saved as a new version',
+  'toast.fail.refine': 'Saving edits failed: {error}',
 
   // ---- 设置与环境 ----
   'settings.title': 'Settings & Environment',
@@ -151,7 +220,30 @@ export const en = {
   'win.minimize': 'Minimize',
   'win.maximize': 'Maximize',
   'win.restore': 'Restore',
-  'win.close': 'Close'
+  'win.close': 'Close',
+
+  // ---- 菜单栏 ----
+  'menu.file': 'File',
+  'menu.edit': 'Edit',
+  'menu.view': 'View',
+  'menu.help': 'Help',
+  'menu.newProject': 'New project…',
+  'menu.openSettings': 'Settings…',
+  'menu.quit': 'Quit',
+  'menu.undo': 'Undo',
+  'menu.toggleSidebar': 'Toggle sidebar',
+  'menu.back': 'Back',
+  'menu.forward': 'Forward',
+  'menu.zoomIn': 'Zoom in',
+  'menu.zoomOut': 'Zoom out',
+  'menu.actualSize': 'Actual size',
+  'menu.about': 'About open_emby',
+  'menu.feedback': 'Send feedback',
+  'menu.feature': 'Request a feature',
+  'menu.docs': 'Documentation',
+
+  // ---- 帮助浮层（问号） ----
+  'help.title': 'Help & feedback'
 } as const
 
 export type LocaleKey = keyof typeof en
