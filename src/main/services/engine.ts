@@ -50,7 +50,10 @@ export function stopEngine(): void {
 
 async function fetchJson(url: string, init?: RequestInit): Promise<any> {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(8000) })
-  if (!res.ok) throw new Error(`emby-engine ${res.status}: ${url}`)
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`emby-engine ${res.status}: ${url}${detail ? ` — ${detail.slice(0, 300)}` : ''}`)
+  }
   return res.json()
 }
 

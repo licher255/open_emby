@@ -45,8 +45,13 @@ export default function Titlebar({ page, canBack, canForward, onBack, onForward,
     const close = (e: MouseEvent) => {
       if (!barRef.current?.contains(e.target as Node)) setOpenMenu(null)
     }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null) }
     window.addEventListener('mousedown', close)
-    return () => window.removeEventListener('mousedown', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [openMenu])
 
   return (
@@ -68,13 +73,15 @@ export default function Titlebar({ page, canBack, canForward, onBack, onForward,
             <div key={m.id} className="tb-menu">
               <button
                 className={`tb-menu-label ${openMenu === m.id ? 'open' : ''}`}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === m.id}
                 onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
                 onMouseEnter={() => { if (openMenu) setOpenMenu(m.id) }}
               >
                 {t(`menu.${m.id}` as never)}
               </button>
               {openMenu === m.id && (
-                <div className="tb-dropdown">
+                <div className="tb-dropdown" role="menu">
                   {m.items.map((item, i) =>
                     item === 'sep' ? (
                       <div key={i} className="tb-sep" />
@@ -82,6 +89,7 @@ export default function Titlebar({ page, canBack, canForward, onBack, onForward,
                       <button
                         key={item}
                         className="tb-item"
+                        role="menuitem"
                         onClick={() => { setOpenMenu(null); onMenuAction(item) }}
                       >
                         {t(`menu.${item}` as never)}

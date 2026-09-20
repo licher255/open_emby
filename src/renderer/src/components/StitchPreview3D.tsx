@@ -83,6 +83,7 @@ export default function StitchPreview3D({ stitches, hidden }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<{ scene: THREE.Scene; group: THREE.Group } | null>(null)
 
+  // 场景/渲染器只随针迹数据重建；隐藏层切换只换线迹组（见下方 effect）
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
@@ -115,10 +116,7 @@ export default function StitchPreview3D({ stitches, hidden }: Props) {
     const rim = new THREE.DirectionalLight(0xdde4ff, 0.5)
     rim.position.set(cx - widthMm * 0.5, widthMm * 0.4, cz + heightMm)
     scene.add(rim)
-
-    const group = buildScene(stitches, hidden)
-    scene.add(group)
-    sceneRef.current = { scene, group }
+    sceneRef.current = { scene, group: new THREE.Group() }
 
     let raf = 0
     const loop = () => {
@@ -142,6 +140,26 @@ export default function StitchPreview3D({ stitches, hidden }: Props) {
         }
       })
       sceneRef.current = null
+    }
+  }, [stitches]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 线迹组：针迹或隐藏层变化时重建，复用已存在的场景
+  useEffect(() => {
+    const ctx = sceneRef.current
+    if (!ctx) return
+    const group = buildScene(stitches, hidden)
+    ctx.scene.add(group)
+    ctx.group = group
+    return () => {
+      ctx.scene.remove(group)
+      group.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose()
+          const m = o.material
+          if (Array.isArray(m)) m.forEach((x) => x.dispose())
+          else m.dispose()
+        }
+      })
     }
   }, [stitches, hidden])
 

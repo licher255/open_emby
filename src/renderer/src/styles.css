@@ -854,3 +854,24 @@ td:last-child { font-family: var(--font-mono); font-size: 12.5px; color: var(--m
   position: absolute; inset: 0; width: 100%; height: 100%;
   mix-blend-mode: multiply;
 }
+
+/* 键盘可达性（HIG）：全局焦点环；鼠标点击不触发（:focus-visible） */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* 减弱动态效果（HIG / 辅助功能）：关闭循环动画与过渡 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .progress-fill.indeterminate { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* 破坏性操作主按钮（归档等确认框） */
+.btn-pill.danger { background: #c7352c; }
+.btn-pill.danger:hover { background: #b02d25; }

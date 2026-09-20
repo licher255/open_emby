@@ -1,12 +1,19 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, nativeTheme } from 'electron'
 import { join } from 'path'
 import { registerIpc, bootServices, shutdownServices } from './ipc'
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL
+
+// 单实例：第二次启动聚焦已有窗口，避免 sidecar/engine 端口冲突
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
+
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'icon-window.png')
   : join(__dirname, '../../build/icon-window.png')
 let quitting = false
+let mainWin: BrowserWindow | null = null
 
 if (process.platform === 'win32') app.setAppUserModelId('com.openemby.app')
 
@@ -21,19 +28,23 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
+    minWidth: 1080, // 侧栏 + 工作区不至于互相挤压的最小宽度
+    minHeight: 700,
     show: false,
     title: 'open_emby — AI 刺绣制版',
     icon: iconPath,
-    backgroundColor: '#e6eaf0',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#e6eaf0',
     frame: false, // 无边框：自绘标题栏（renderer/Titlebar.tsx）
     titleBarStyle: 'hidden',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true, // preload 只用 contextBridge/ipcRenderer/webUtils，均可沙箱内运行
       contextIsolation: true,
       nodeIntegration: false
     }
   })
+  mainWin = win
+  win.on('closed', () => { if (mainWin === win) mainWin = null })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -77,6 +88,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('second-instance', () => {
+  if (mainWin) {
+    if (mainWin.isMinimized()) mainWin.restore()
+    mainWin.focus()
+  }
 })
 
 // 任何退出路径（关窗 / Cmd+Q / 任务栏退出）都先杀 sidecar / engine 进程树

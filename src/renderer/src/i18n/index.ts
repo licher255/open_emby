@@ -14,7 +14,10 @@ interface I18nState {
 
 export const useI18n = create<I18nState>((set) => ({
   locale: 'en', // 原生默认语言
-  setLocale: (locale) => set({ locale })
+  setLocale: (locale) => {
+    document.documentElement.lang = locale // 同步 <html lang>，屏幕阅读器与字体回滚依赖它
+    set({ locale })
+  }
 }))
 
 /** 翻译 + {var} 插值；缺译回退英文 */

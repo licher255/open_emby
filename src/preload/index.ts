@@ -34,7 +34,9 @@ const api = {
   },
   files: {
     selectImage: (): Promise<string | null> => ipcRenderer.invoke(IpcChannels.selectImage),
+    selectDirectory: (): Promise<string | null> => ipcRenderer.invoke(IpcChannels.selectDirectory),
     readImageDataUrl: (path: string): Promise<string> => ipcRenderer.invoke(IpcChannels.readImageDataUrl, path),
+    readImageThumb: (path: string, maxDim?: number): Promise<string> => ipcRenderer.invoke(IpcChannels.readImageThumb, path, maxDim),
     pathForFile: (f: File): string => webUtils.getPathForFile(f)
   },
   projects: {

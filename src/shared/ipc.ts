@@ -10,7 +10,9 @@ export const IpcChannels = {
   engineProgress: 'engine:progress', // main -> renderer push（结构化节点事件）
   // 文件
   selectImage: 'dialog:select-image',
+  selectDirectory: 'dialog:select-directory',
   readImageDataUrl: 'fs:read-image-data-url',
+  readImageThumb: 'fs:read-image-thumb',
   // 项目库
   projectList: 'projects:list',
   projectCreate: 'projects:create',

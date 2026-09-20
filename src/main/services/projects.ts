@@ -201,15 +201,33 @@ export async function saveImageDataUrl(id: string, dataUrl: string, stem: string
 }
 
 /** 项目工作台状态（制版方案/针迹/当前选中图），持久化在 state.json 并被版本库跟踪 */
+// 针迹序列（可达数万点、数 MB）不内嵌 state.json，外置为 stitches.json 引用，
+// 避免每次 persist 都重写大 JSON；stitches.json 本身仍被 Git 跟踪，回退一致性不变。
+const STITCHES_FILE = 'stitches.json'
+
 export function loadProjectState(id: string): Record<string, unknown> | null {
   const p = join(projectDir(id), 'state.json')
   if (!existsSync(p)) return null
-  try { return JSON.parse(readFileSync(p, 'utf-8')) } catch { return null }
+  try {
+    const state = JSON.parse(readFileSync(p, 'utf-8')) as Record<string, unknown> & { stitches?: unknown }
+    const ref = (state.stitches as { $artifact?: string } | null)?.$artifact
+    if (ref) {
+      const ap = join(projectDir(id), ref)
+      state.stitches = existsSync(ap) ? JSON.parse(readFileSync(ap, 'utf-8')) : null
+    }
+    return state
+  } catch { return null }
 }
 
 export async function saveProjectState(id: string, state: Record<string, unknown>, commitMessage: string): Promise<void> {
   if (!readMeta(id)) throw new Error(`项目不存在: ${id}`)
-  writeFileSync(join(projectDir(id), 'state.json'), JSON.stringify(state, null, 2), 'utf-8')
+  let out = state
+  const stitches = state.stitches as { points?: unknown } | null | undefined
+  if (stitches && Array.isArray(stitches.points)) {
+    writeFileSync(join(projectDir(id), STITCHES_FILE), JSON.stringify(stitches), 'utf-8')
+    out = { ...state, stitches: { $artifact: STITCHES_FILE } }
+  }
+  writeFileSync(join(projectDir(id), 'state.json'), JSON.stringify(out, null, 2), 'utf-8')
   await commitAll(projectDir(id), commitMessage)
 }
 
