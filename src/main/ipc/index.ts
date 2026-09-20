@@ -5,11 +5,12 @@ import { basename, extname, join } from 'path'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, DigitizePlan, EngineProgressEvent, ExportRequest, ProjectImageKind, StitchResult } from '@shared/types'
 import { getSettings, setSettings } from '../services/settings'
-import { engineStatus, startEngine, stopEngine, submitWorkflow, stylizeImage } from '../services/engine'
+import { engineStatus, generateColorBlocks, generateLineArt, startEngine, stopEngine, submitWorkflow } from '../services/engine'
 import { sidecarStatus, sidecarCall, startSidecar, stopSidecar } from '../services/sidecar'
 import { listModels } from '../services/modelManager'
 import { listPlugins, invokePlugin } from '../services/pluginHost'
-import { createProject, importImage, listProjectImages, listProjects, loadProjectState, projectHistory, restoreProject, saveImageDataUrl, saveProjectState } from '../services/projects'
+import { archiveProjectImage, createProject, importImage, listProjectImages, listProjects, loadProjectState, projectHistory, renameProjectImage, restoreProject, saveImageDataUrl, saveProjectState } from '../services/projects'
+import { canvasAdjust } from '../services/projects'
 
 // dev: 仓库内 plugins/；打包后: resources/plugins
 const PLUGINS_DIR = app.isPackaged
@@ -27,11 +28,15 @@ export function registerIpc(): void {
   ipcMain.handle(IpcChannels.engineStatus, () => engineStatus())
   ipcMain.handle(IpcChannels.engineSubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
 
-  // 风格化（制版第一步：平涂色块化），节点级进度推送 engineProgress
-  ipcMain.handle(IpcChannels.engineStylize, async (e, args: { imagePath: string; maxColors?: number }) => {
+  const withEngineProgress = (e: Electron.IpcMainInvokeEvent) => {
     const win = e.sender
-    const send = (ev: EngineProgressEvent) => { if (!win.isDestroyed()) win.send(IpcChannels.engineProgress, ev) }
-    return stylizeImage(args.imagePath, { maxColors: args.maxColors }, send)
+    return (ev: EngineProgressEvent) => { if (!win.isDestroyed()) win.send(IpcChannels.engineProgress, ev) }
+  }
+  ipcMain.handle(IpcChannels.engineGenerateColorBlocks, (e, args: { imagePath: string; lineArtPath?: string | null; maxColors?: number }) => {
+    return generateColorBlocks(args.imagePath, { lineArtPath: args.lineArtPath, maxColors: args.maxColors }, withEngineProgress(e))
+  })
+  ipcMain.handle(IpcChannels.engineGenerateLineArt, (e, args: { colorBlocksPath: string }) => {
+    return generateLineArt(args.colorBlocksPath, withEngineProgress(e))
   })
 
   // 图片选择对话框（任意常见格式）
@@ -54,9 +59,16 @@ export function registerIpc(): void {
   })
 
   ipcMain.handle(IpcChannels.sidecarStatus, () => sidecarStatus())
-  ipcMain.handle(IpcChannels.sidecarDigitizePlan, (_e, args: { imagePath: string; intent: string }) =>
+  ipcMain.handle(IpcChannels.sidecarDigitizePlan, (_e, args: { imagePath: string; intent: string; widthMm?: number }) =>
     sidecarCall<DigitizePlan>('/digitize/plan', args))
-  ipcMain.handle(IpcChannels.sidecarDigitizeStitches, (_e, args: { imagePath: string; maxColors?: number; widthMm?: number }) =>
+  ipcMain.handle(IpcChannels.sidecarDigitizeStitches, (_e, args: {
+    imagePath: string
+    maxColors?: number
+    widthMm?: number
+    minStitchMm?: number
+    maxStitchMm?: number
+    curveToleranceMm?: number
+  }) =>
     sidecarCall<StitchResult>('/digitize/stitches', args))
   ipcMain.handle(IpcChannels.sidecarExport, (_e, req: ExportRequest) =>
     sidecarCall<{ ok: boolean; files: string[] }>('/export', req))
@@ -67,6 +79,10 @@ export function registerIpc(): void {
   ipcMain.handle(IpcChannels.projectList, () => listProjects())
   ipcMain.handle(IpcChannels.projectCreate, (_e, name: string) => createProject(name))
   ipcMain.handle(IpcChannels.projectImages, (_e, id: string) => listProjectImages(id))
+  ipcMain.handle(IpcChannels.projectArchiveImage, (_e, args: { projectId: string; imagePath: string }) =>
+    archiveProjectImage(args.projectId, args.imagePath))
+  ipcMain.handle(IpcChannels.projectRenameImage, (_e, args: { projectId: string; imagePath: string; name: string }) =>
+    renameProjectImage(args.projectId, args.imagePath, args.name))
   ipcMain.handle(IpcChannels.projectImportImage, (_e, args: { projectId: string; srcPath: string }) =>
     importImage(args.projectId, args.srcPath))
   ipcMain.handle(IpcChannels.projectSaveImage, (_e, args: { projectId: string; dataUrl: string; stem: string; kind?: ProjectImageKind; derivedFrom?: string }) =>
@@ -77,6 +93,8 @@ export function registerIpc(): void {
   ipcMain.handle(IpcChannels.projectHistory, (_e, id: string) => projectHistory(id))
   ipcMain.handle(IpcChannels.projectRestore, (_e, args: { projectId: string; oid: string }) =>
     restoreProject(args.projectId, args.oid))
+  ipcMain.handle(IpcChannels.projectCanvasAdjust, (_e, args: { projectId: string; imagePath: string; widthMm: number; heightMm: number; mode: string }) =>
+    canvasAdjust(args.projectId, args.imagePath, args.widthMm, args.heightMm, args.mode))
 
   ipcMain.handle(IpcChannels.pluginList, () => listPlugins(PLUGINS_DIR).map((p) => p.manifest))
   ipcMain.handle(IpcChannels.pluginInvoke, (_e, id: string, input: unknown) => {

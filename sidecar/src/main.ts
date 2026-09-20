@@ -26,10 +26,32 @@ app.post('/digitize/plan', async (req) => {
 })
 
 // 针迹生成：色块图 → 真实针迹序列（Rust 核心）
-interface StitchesBody { imagePath: string; maxColors?: number; widthMm?: number }
+interface StitchesBody {
+  imagePath: string
+  maxColors?: number
+  widthMm?: number
+  minStitchMm?: number
+  maxStitchMm?: number
+  curveToleranceMm?: number
+}
 app.post('/digitize/stitches', async (req) => {
   const b = req.body as StitchesBody
-  return loadCore().generateStitches(b.imagePath, b.maxColors ?? 8, b.widthMm ?? 100)
+  return loadCore().generateStitches(
+    b.imagePath,
+    b.maxColors ?? 8,
+    b.widthMm ?? 100,
+    b.minStitchMm ?? 0.6,
+    b.maxStitchMm ?? 3.0,
+    b.curveToleranceMm ?? 0.15
+  )
+})
+
+// 画布调整（物理尺寸 mm → 像素，fit/fill/stretch）
+interface CanvasBody { imagePath: string; destPath: string; widthMm: number; heightMm: number; mode?: string }
+app.post('/canvas/resize', async (req) => {
+  const b = req.body as CanvasBody
+  loadCore().canvasResize(b.imagePath, b.destPath, b.widthMm, b.heightMm, b.mode ?? 'fit')
+  return { ok: true, path: b.destPath }
 })
 
 interface ExportBody { points: Array<{ x: number; y: number; flag: number; color: number }>; palette?: string[]; name?: string; format?: string; outDir: string }

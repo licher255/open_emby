@@ -5,7 +5,8 @@ export const IpcChannels = {
   // emby-engine（Rust 生成引擎，ComfyUI 兼容 API）
   engineStatus: 'engine:status',
   engineSubmitWorkflow: 'engine:submit-workflow',
-  engineStylize: 'engine:stylize', // 平涂色块化（制版风格化第一步，原生节点）
+  engineGenerateColorBlocks: 'engine:generate-color-blocks',
+  engineGenerateLineArt: 'engine:generate-line-art',
   engineProgress: 'engine:progress', // main -> renderer push（结构化节点事件）
   // 文件
   selectImage: 'dialog:select-image',
@@ -14,12 +15,15 @@ export const IpcChannels = {
   projectList: 'projects:list',
   projectCreate: 'projects:create',
   projectImages: 'projects:images',
+  projectArchiveImage: 'projects:archive-image',
+  projectRenameImage: 'projects:rename-image',
   projectImportImage: 'projects:import-image',
   projectSaveImage: 'projects:save-image',
   projectLoadState: 'projects:load-state',
   projectSaveState: 'projects:save-state',
   projectHistory: 'projects:history',
   projectRestore: 'projects:restore',
+  projectCanvasAdjust: 'projects:canvas-adjust',
   // Sidecar (制版核心 / Agent)
   sidecarStatus: 'sidecar:status',
   sidecarDigitizePlan: 'sidecar:digitize-plan',

@@ -8,7 +8,9 @@ files:
   - package.json
 # 随包分发的原生组件与 sidecar bundle
 extraResources:
-  - from: crates/emby-engine/target/release/emby-engine.exe
+  - from: build/icon-window.png
+    to: icon-window.png
+  - from: build/bin/emby-engine.exe
     to: bin/emby-engine.exe
   - from: crates/emby-core/emby-core.win32-x64-msvc.node
     to: bin/emby-core.win32-x64-msvc.node
@@ -18,6 +20,7 @@ extraResources:
     to: plugins
 asar: true
 win:
+  icon: build/icon.ico
   target:
     - nsis
 nsis:

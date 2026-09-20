@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "sidecar": "pnpm --dir sidecar run dev",
     "core:build": "pnpm --dir crates/emby-core run build",
-    "engine:build": "cargo build --release --manifest-path crates/emby-engine/Cargo.toml",
+    "engine:build": "node scripts/build-engine.mjs",
     "engine:dev": "cargo run --manifest-path crates/emby-engine/Cargo.toml",
     "setup": "pnpm install && pnpm --dir sidecar install && pnpm --dir crates/emby-core install && pnpm run core:build && pnpm run engine:build"
   },
