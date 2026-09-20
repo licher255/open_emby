@@ -25,7 +25,7 @@ export const zhCN: Messages = {
 
   // ---- 编辑器：阶段 ----
   'step.import': '导入图稿',
-  'step.stylize': '风格化·色块分离',
+  'step.stylize': '线稿与色块',
   'step.plan': '制版方案',
   'step.stitches': '针迹与预览',
   'step.export': '导出文件',
@@ -34,11 +34,69 @@ export const zhCN: Messages = {
   'editor.input': '输入',
   'editor.output': '产物',
   'editor.noInput': '请先在第 1 步选择参考图',
+  'editor.readyToStylize': '参考图已就绪，可生成并编辑色块与线稿图层',
   'editor.noReference': '还没有参考图',
   'editor.pastOutputs': '历史产物',
+  'editor.hidePastOutputs': '隐藏历史产物',
+  'editor.showPastOutputs': '显示历史产物',
+  'editor.archive': '归档',
+  'editor.archiveConfirm': '归档「{name}」？原文件和 Git 历史会保留。',
+  'editor.rename': '重命名',
+  'editor.renamePrompt': '输入新的作品名称（扩展名会自动保留）',
   'editor.layerBlocks': '色块',
   'editor.layerLineart': '线稿',
   'editor.layerOverlay': '叠加',
+  'editor.regenerateLineArt': '根据当前色块重新生成线稿',
+  'editor.regenerateBlocks': '使用调整后的线稿重新生成色块',
+  'editor.lineArtShort': '重建线稿',
+  'editor.blocksShort': '重建色块',
+  'editor.twoLayers': '2 个图层',
+
+  // ---- 画布修改器（步骤 1） ----
+  'canvas.title': '画布（物理尺寸）',
+  'canvas.width': '宽',
+  'canvas.height': '高',
+  'canvas.mode.fit': '适应',
+  'canvas.mode.fill': '填充',
+  'canvas.mode.stretch': '拉伸',
+  'canvas.apply': '应用画布',
+  'canvas.current': '当前画布：{w} × {h} mm —— 决定针迹行距与补针基准',
+
+  // ---- 精修编辑器（步骤 2） ----
+  'refine.title': '图层精修',
+  'refine.open': '精修',
+  'refine.tool.marquee': '框选',
+  'refine.tool.pan': '抓手 · 平移画布',
+  'refine.tool.pen': '钢笔',
+  'refine.tool.fill': '填色块',
+  'refine.tool.eraser': '橡皮擦',
+  'refine.brushSize': '笔刷大小',
+  'refine.apply': '应用修改',
+  'refine.hint.marquee': '拖出选区后，点色板填充该选区',
+  'refine.hint.pen': '在线稿层上绘制',
+  'refine.hint.fill': '点击某个色块，将其替换为选中的色板颜色',
+  'refine.undo': '撤销',
+  'refine.zoomIn': '放大',
+  'refine.zoomOut': '缩小',
+  'refine.zoomFit': '适应',
+
+  // ---- 图层 ----
+  'layers.title': '图层',
+  'layers.colorBase': '色块底图',
+  'layers.lineBase': '线稿',
+  'layers.newFillName': '填充图层 {count}',
+  'layers.newLineName': '线稿图层 {count}',
+  'layers.addFill': '添加填充图层',
+  'layers.addLine': '添加线稿图层',
+  'layers.show': '显示图层',
+  'layers.hide': '隐藏图层',
+  'layers.delete': '删除图层',
+
+  // ---- Toast 补充 ----
+  'toast.canvasDone': '画布已调整为 {w} × {h} mm',
+  'toast.fail.canvas': '画布调整失败：{error}',
+  'toast.refineDone': '修改已保存为新版本',
+  'toast.fail.refine': '保存修改失败：{error}',
 
   // ---- 编辑器：图稿库 ----
   'editor.importImage': '＋ 导入图稿',
@@ -54,7 +112,7 @@ export const zhCN: Messages = {
   'editor.engineNote': 'emby-engine · EmbyColorBlockStylize（已存回项目）',
 
   // ---- 编辑器：操作 ----
-  'editor.stylize': '① 风格化 · 色块分离',
+  'editor.stylize': '同时生成线稿与色块',
   'editor.stylizing': '生成中…',
   'editor.plan': '② 生成制版方案',
   'editor.planning': '分析中…',
@@ -72,6 +130,11 @@ export const zhCN: Messages = {
 
   // ---- 针迹卡片 ----
   'stitch.title': '针迹仿真 · 检查与分层',
+  'stitch.postProcess': '机器轨迹约束',
+  'stitch.minLength': '最短针步',
+  'stitch.maxLength': '最长针步',
+  'stitch.curveTolerance': '曲线误差',
+  'stitch.postProcessHint': '导出前把曲线简化为直线段，并移除过短、过密的落针点。',
   'stitch.view2d': '2D 仿真',
   'stitch.view3d': '3D 预览',
   'stitch.checks': '检查',
@@ -105,17 +168,25 @@ export const zhCN: Messages = {
   // ---- Toast ----
   'toast.imported': '图稿已导入项目',
   'toast.stylizeDone': '风格化完成，已存回项目图稿库',
+  'toast.blocksDone': '已根据当前线稿重新生成色块',
+  'toast.lineArtDone': '已根据当前色块重新生成线稿',
   'toast.planDone': '制版方案已生成',
   'toast.stitchDone': '针迹生成完成：{stitches} 针 / {changes} 次换色',
   'toast.exportDone': '已导出 DST 与生产单（colorsheet.json）',
   'toast.restored': '已回退（原状态已自动保存）',
+  'toast.archived': '图片已归档',
+  'toast.renamed': '图片已重命名',
   'toast.fail.import': '导入失败：{error}',
   'toast.fail.drop': '无法读取拖入的文件',
   'toast.fail.stylize': '风格化失败：{error}（请确认 emby-engine 已启动，见设置与环境）',
+  'toast.fail.blocks': '色块生成失败：{error}',
+  'toast.fail.lineArt': '线稿生成失败：{error}',
   'toast.fail.plan': '制版方案生成失败：{error}',
   'toast.fail.stitch': '针迹生成失败：{error}',
   'toast.fail.export': '导出失败：{error}',
   'toast.fail.restore': '回退失败：{error}',
+  'toast.fail.archive': '归档失败：{error}',
+  'toast.fail.rename': '重命名失败：{error}',
 
   // ---- 设置与环境 ----
   'settings.title': '设置与环境',
@@ -153,5 +224,28 @@ export const zhCN: Messages = {
   'win.minimize': '最小化',
   'win.maximize': '最大化',
   'win.restore': '还原',
-  'win.close': '关闭'
+  'win.close': '关闭',
+
+  // ---- 菜单栏 ----
+  'menu.file': '文件',
+  'menu.edit': '编辑',
+  'menu.view': '视图',
+  'menu.help': '帮助',
+  'menu.newProject': '新建项目…',
+  'menu.openSettings': '设置…',
+  'menu.quit': '退出',
+  'menu.undo': '撤销',
+  'menu.toggleSidebar': '切换侧边栏',
+  'menu.back': '后退',
+  'menu.forward': '前进',
+  'menu.zoomIn': '放大',
+  'menu.zoomOut': '缩小',
+  'menu.actualSize': '实际大小',
+  'menu.about': '关于 open_emby',
+  'menu.feedback': '发送反馈',
+  'menu.feature': '请求新功能',
+  'menu.docs': '文档',
+
+  // ---- 帮助浮层（问号） ----
+  'help.title': '帮助与反馈'
 }

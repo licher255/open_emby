@@ -1,10 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n'
+import Icon from './Icon'
 
-/** 自绘标题栏（无边框窗口）：左侧品牌 + 页面名，右侧窗口控制。整条可拖拽。 */
-export default function Titlebar({ page }: { page: string }) {
+export type MenuAction =
+  | 'newProject' | 'openSettings' | 'quit'
+  | 'undo'
+  | 'toggleSidebar' | 'zoomIn' | 'zoomOut' | 'actualSize'
+  | 'about' | 'feedback' | 'feature' | 'docs'
+
+interface Props {
+  page: string
+  canBack: boolean
+  canForward: boolean
+  onBack: () => void
+  onForward: () => void
+  onToggleSidebar: () => void
+  onMenuAction: (a: MenuAction) => void
+}
+
+/** 菜单定义（桌面惯例：File / Edit / View / Help） */
+const MENUS: Array<{ id: 'file' | 'edit' | 'view' | 'help'; items: Array<MenuAction | 'sep'> }> = [
+  { id: 'file', items: ['newProject', 'openSettings', 'sep', 'quit'] },
+  { id: 'edit', items: ['undo'] },
+  { id: 'view', items: ['toggleSidebar', 'sep', 'zoomIn', 'zoomOut', 'actualSize'] },
+  { id: 'help', items: ['about', 'feedback', 'feature', 'docs'] }
+]
+
+/** 自绘标题栏：侧栏开关 + 前进/后退 + 菜单栏 + 当前页面 + 窗口控制。整条可拖拽。 */
+export default function Titlebar({ page, canBack, canForward, onBack, onForward, onToggleSidebar, onMenuAction }: Props) {
   const t = useT()
   const [maximized, setMaximized] = useState(false)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const barRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.openEmby.window.isMaximized().then(setMaximized).catch(() => {})
@@ -12,10 +39,60 @@ export default function Titlebar({ page }: { page: string }) {
     return () => { off() }
   }, [])
 
+  // 点击别处收起菜单
+  useEffect(() => {
+    if (!openMenu) return
+    const close = (e: MouseEvent) => {
+      if (!barRef.current?.contains(e.target as Node)) setOpenMenu(null)
+    }
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [openMenu])
+
   return (
-    <div className="titlebar">
+    <div className="titlebar" ref={barRef}>
       <div className="titlebar-left">
-        <span className="titlebar-logo">open<em>emby</em></span>
+        <div className="titlebar-nav">
+          <button className="tb-btn" data-tip={t('menu.toggleSidebar')} onClick={onToggleSidebar}>
+            <Icon name="bars" size={13} />
+          </button>
+          <button className="tb-btn" data-tip={t('menu.back')} disabled={!canBack} onClick={onBack}>
+            <Icon name="arrow-left" size={13} />
+          </button>
+          <button className="tb-btn" data-tip={t('menu.forward')} disabled={!canForward} onClick={onForward}>
+            <Icon name="arrow-right" size={13} />
+          </button>
+        </div>
+        <div className="tb-menus">
+          {MENUS.map((m) => (
+            <div key={m.id} className="tb-menu">
+              <button
+                className={`tb-menu-label ${openMenu === m.id ? 'open' : ''}`}
+                onClick={() => setOpenMenu(openMenu === m.id ? null : m.id)}
+                onMouseEnter={() => { if (openMenu) setOpenMenu(m.id) }}
+              >
+                {t(`menu.${m.id}` as never)}
+              </button>
+              {openMenu === m.id && (
+                <div className="tb-dropdown">
+                  {m.items.map((item, i) =>
+                    item === 'sep' ? (
+                      <div key={i} className="tb-sep" />
+                    ) : (
+                      <button
+                        key={item}
+                        className="tb-item"
+                        onClick={() => { setOpenMenu(null); onMenuAction(item) }}
+                      >
+                        {t(`menu.${item}` as never)}
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
         <span className="titlebar-page">{page}</span>
       </div>
       <div className="titlebar-controls">

@@ -4,10 +4,9 @@ import App from './App'
 import './styles.css'
 import { initLocale } from './i18n'
 
-initLocale().finally(() => {
-  createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  )
-})
+void initLocale()
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
