@@ -9,6 +9,7 @@ use image::imageops::FilterType;
 use napi_derive::napi;
 
 #[napi(object)]
+#[derive(Clone, Copy, Debug)]
 pub struct StitchPoint {
     /// mm，向右为正
     pub x: f64,
@@ -38,7 +39,14 @@ const STITCH_LEN_MM: f64 = 1.2; // 针步间隔
 const MIN_RUN_MM: f64 = 0.8; // 忽略短于此的碎段
 
 #[napi]
-pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> napi::Result<StitchResult> {
+pub fn generate_stitches(
+    image_path: String,
+    max_colors: u32,
+    width_mm: f64,
+    min_stitch_mm: f64,
+    max_stitch_mm: f64,
+    curve_tolerance_mm: f64,
+) -> napi::Result<StitchResult> {
     let img = image::open(&image_path)
         .map_err(|e| napi::Error::from_reason(format!("无法读取图片 {image_path}: {e}")))?;
     let (ow, oh) = (img.width(), img.height());
@@ -92,7 +100,7 @@ pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> 
 
     let mut points: Vec<StitchPoint> = Vec::new();
     let (mut cx, mut cy) = (0.0f64, 0.0f64); // 当前针位 mm
-    let (mut stitch_count, mut color_changes) = (0u32, 0u32);
+    let mut color_changes = 0u32;
 
     for (ci, &c) in order.iter().enumerate() {
         if ci > 0 {
@@ -133,9 +141,6 @@ pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> 
                 let dist = ((sx - cx).powi(2) + (ym - cy).powi(2)).sqrt();
                 let flag = if dist <= ROW_SPACING_MM * 1.6 { FLAG_STITCH } else { FLAG_JUMP };
                 points.push(StitchPoint { x: sx, y: ym, flag, color: c as u32 });
-                if flag == FLAG_STITCH {
-                    stitch_count += 1;
-                }
 
                 // 行内按针步间隔补中间点
                 let len = (ex - sx).abs();
@@ -143,10 +148,8 @@ pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> 
                 for i in 1..=n_mid {
                     let xm = sx + (ex - sx) * i as f64 / (n_mid as f64 + 1.0);
                     points.push(StitchPoint { x: xm, y: ym, flag: FLAG_STITCH, color: c as u32 });
-                    stitch_count += 1;
                 }
                 points.push(StitchPoint { x: ex, y: ym, flag: FLAG_STITCH, color: c as u32 });
-                stitch_count += 1;
                 cx = ex;
                 cy = ym;
             }
@@ -154,6 +157,17 @@ pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> 
             y += spacing_px;
         }
     }
+
+    // 4) 机器约束后处理：曲线折线化、去除过密针眼、限制单针最大跨度。
+    let min_stitch_mm = min_stitch_mm.clamp(0.1, 5.0);
+    let max_stitch_mm = max_stitch_mm.clamp(min_stitch_mm * 2.0, 12.0);
+    let points = post_process_stitches(
+        points,
+        min_stitch_mm,
+        max_stitch_mm,
+        curve_tolerance_mm.clamp(0.01, 2.0),
+    );
+    let stitch_count = points.iter().filter(|p| p.flag == FLAG_STITCH).count() as u32;
 
     Ok(StitchResult {
         points,
@@ -164,6 +178,150 @@ pub fn generate_stitches(image_path: String, max_colors: u32, width_mm: f64) -> 
         color_changes,
         background_index,
     })
+}
+
+fn distance(a: StitchPoint, b: StitchPoint) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+fn point_segment_distance(p: StitchPoint, a: StitchPoint, b: StitchPoint) -> f64 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let len2 = dx * dx + dy * dy;
+    if len2 <= f64::EPSILON {
+        return distance(p, a);
+    }
+    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0);
+    ((p.x - (a.x + t * dx)).powi(2) + (p.y - (a.y + t * dy)).powi(2)).sqrt()
+}
+
+/// Ramer-Douglas-Peucker：把采样曲线变成误差受控的直线段。
+fn simplify_polyline(points: &[StitchPoint], tolerance: f64) -> Vec<StitchPoint> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+    let mut keep = vec![false; points.len()];
+    keep[0] = true;
+    keep[points.len() - 1] = true;
+    let mut stack = vec![(0usize, points.len() - 1)];
+    while let Some((start, end)) = stack.pop() {
+        let mut max_distance = 0.0;
+        let mut split = start;
+        for i in start + 1..end {
+            let d = point_segment_distance(points[i], points[start], points[end]);
+            if d > max_distance {
+                max_distance = d;
+                split = i;
+            }
+        }
+        if max_distance > tolerance {
+            keep[split] = true;
+            stack.push((start, split));
+            stack.push((split, end));
+        }
+    }
+    points.iter().zip(keep).filter_map(|(&point, keep)| keep.then_some(point)).collect()
+}
+
+fn simplify_long_polyline(points: &[StitchPoint], tolerance: f64) -> Vec<StitchPoint> {
+    const CHUNK_POINTS: usize = 512;
+    if points.len() <= CHUNK_POINTS {
+        return simplify_polyline(points, tolerance);
+    }
+    let mut out = vec![points[0]];
+    let mut start = 0usize;
+    while start < points.len() - 1 {
+        let end = (start + CHUNK_POINTS - 1).min(points.len() - 1);
+        out.extend(simplify_polyline(&points[start..=end], tolerance).into_iter().skip(1));
+        start = end;
+    }
+    out
+}
+
+fn enforce_min_spacing(points: Vec<StitchPoint>, min_stitch_mm: f64) -> Vec<StitchPoint> {
+    if points.len() <= 1 {
+        return points;
+    }
+    let end = *points.last().unwrap();
+    let mut kept = vec![points[0]];
+    for &point in &points[1..points.len() - 1] {
+        if distance(*kept.last().unwrap(), point) >= min_stitch_mm {
+            kept.push(point);
+        }
+    }
+    if distance(*kept.last().unwrap(), end) >= min_stitch_mm {
+        kept.push(end);
+    } else if kept.len() > 1 && distance(kept[kept.len() - 2], end) >= min_stitch_mm {
+        *kept.last_mut().unwrap() = end;
+    }
+    kept
+}
+
+fn subdivide_long_segments(points: &[StitchPoint], max_stitch_mm: f64) -> Vec<StitchPoint> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    let mut out = vec![points[0]];
+    for pair in points.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let segments = (distance(a, b) / max_stitch_mm).ceil().max(1.0) as usize;
+        for i in 1..=segments {
+            let t = i as f64 / segments as f64;
+            out.push(StitchPoint {
+                x: a.x + (b.x - a.x) * t,
+                y: a.y + (b.y - a.y) * t,
+                flag: FLAG_STITCH,
+                color: b.color,
+            });
+        }
+    }
+    out
+}
+
+fn flush_stitch_run(
+    out: &mut Vec<StitchPoint>,
+    anchor: &mut StitchPoint,
+    run: &mut Vec<StitchPoint>,
+    min_stitch_mm: f64,
+    max_stitch_mm: f64,
+    curve_tolerance_mm: f64,
+) {
+    if run.is_empty() {
+        return;
+    }
+    let mut path = Vec::with_capacity(run.len() + 1);
+    path.push(*anchor);
+    path.append(run);
+    let path = simplify_long_polyline(&path, curve_tolerance_mm);
+    let path = enforce_min_spacing(path, min_stitch_mm);
+    let path = subdivide_long_segments(&path, max_stitch_mm);
+    for &point in path.iter().skip(1) {
+        out.push(point);
+        *anchor = point;
+    }
+}
+
+fn post_process_stitches(
+    points: Vec<StitchPoint>,
+    min_stitch_mm: f64,
+    max_stitch_mm: f64,
+    curve_tolerance_mm: f64,
+) -> Vec<StitchPoint> {
+    let mut out = Vec::with_capacity(points.len());
+    let mut run = Vec::new();
+    let mut anchor = StitchPoint { x: 0.0, y: 0.0, flag: FLAG_JUMP, color: 0 };
+    for point in points {
+        if point.flag == FLAG_STITCH {
+            run.push(point);
+            continue;
+        }
+        flush_stitch_run(&mut out, &mut anchor, &mut run, min_stitch_mm, max_stitch_mm, curve_tolerance_mm);
+        if point.flag == FLAG_JUMP {
+            anchor = point;
+        }
+        out.push(point);
+    }
+    flush_stitch_run(&mut out, &mut anchor, &mut run, min_stitch_mm, max_stitch_mm, curve_tolerance_mm);
+    out
 }
 
 /// 3x3 多数滤波：标签图去碎点
@@ -193,4 +351,39 @@ fn majority_filter(labels: &[u32], w: usize, h: usize, k: usize) -> Vec<u32> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stitch(x: f64, y: f64) -> StitchPoint {
+        StitchPoint { x, y, flag: FLAG_STITCH, color: 0 }
+    }
+
+    #[test]
+    fn post_process_enforces_machine_geometry() {
+        let input = vec![
+            stitch(0.2, 0.0),
+            stitch(0.4, 0.01),
+            stitch(1.2, 0.02),
+            stitch(7.2, 0.0),
+        ];
+        let output = post_process_stitches(input, 0.6, 3.0, 0.1);
+        let mut previous = StitchPoint { x: 0.0, y: 0.0, flag: FLAG_JUMP, color: 0 };
+        assert!(output.len() >= 3);
+        for point in output {
+            let length = distance(previous, point);
+            assert!(length >= 0.6 - 1e-9, "segment too short: {length}");
+            assert!(length <= 3.0 + 1e-9, "segment too long: {length}");
+            previous = point;
+        }
+    }
+
+    #[test]
+    fn post_process_keeps_a_real_corner() {
+        let input = vec![stitch(2.0, 0.0), stitch(2.0, 2.0), stitch(4.0, 2.0)];
+        let output = post_process_stitches(input, 0.6, 3.0, 0.1);
+        assert!(output.iter().any(|point| (point.x - 2.0).abs() < 1e-9 && (point.y - 2.0).abs() < 1e-9));
+    }
 }

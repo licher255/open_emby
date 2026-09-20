@@ -7,5 +7,5 @@ mod img;
 mod stitch;
 
 pub use dst::{dst_encode, StitchRecord};
-pub use img::{analyze_image, phash, save_resized_png, AnalysisResult, StitchRegion};
+pub use img::{analyze_image, canvas_resize, phash, save_resized_png, AnalysisResult, StitchRegion};
 pub use stitch::{generate_stitches, StitchPoint, StitchResult};
