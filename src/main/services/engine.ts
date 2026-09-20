@@ -5,14 +5,17 @@ import { spawn, type ChildProcess } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { basename, join } from 'path'
 import WebSocket from 'ws'
-import type { EngineProgressEvent, StylizeResult } from '@shared/types'
+import type { EngineProgressEvent } from '@shared/types'
 import { getSettings } from './settings'
+import { stopProcessTree } from './processTree'
 
 let proc: ChildProcess | null = null
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** 引擎二进制位置（dev: cargo target；prod: 打包进 resources/bin） */
 function engineBin(): string | null {
   const candidates = [
+    join(__dirname, '../../build/bin/emby-engine.exe'),
     join(__dirname, '../../crates/emby-engine/target/release/emby-engine.exe'),
     join(__dirname, '../../crates/emby-engine/target/debug/emby-engine.exe'),
     join(process.resourcesPath ?? '', 'bin', 'emby-engine.exe')
@@ -30,6 +33,7 @@ export function startEngine(onLog: (line: string) => void): void {
   const url = new URL(getSettings().engineUrl)
   proc = spawn(bin, ['--host', url.hostname, '--port', url.port || '8189'], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
     env: { ...process.env, OPEN_EMBY_DATA_ROOT: getSettings().dataRoot }
   })
   proc.stdout?.on('data', (d) => onLog(`[engine] ${String(d).trim()}`))
@@ -39,20 +43,28 @@ export function startEngine(onLog: (line: string) => void): void {
 
 export function stopEngine(): void {
   if (!proc) return
-  const pid = proc.pid
+  const child = proc
   proc = null
-  if (!pid) return
-  if (process.platform === 'win32') {
-    try { spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' }) } catch { /* ignore */ }
-  } else {
-    try { process.kill(-pid, 'SIGKILL') } catch { /* ignore */ }
-  }
+  stopProcessTree(child)
 }
 
 async function fetchJson(url: string, init?: RequestInit): Promise<any> {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(8000) })
   if (!res.ok) throw new Error(`emby-engine ${res.status}: ${url}`)
   return res.json()
+}
+
+async function ensureEngineReady(): Promise<void> {
+  if (!proc) startEngine(() => {})
+  const url = getSettings().engineUrl
+  for (let attempt = 0; attempt < 30; attempt++) {
+    try {
+      const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(300) })
+      if (response.ok) return
+    } catch { /* service is still starting */ }
+    await delay(100)
+  }
+  throw new Error('emby-engine 启动超时')
 }
 
 export async function engineStatus(): Promise<{ reachable: boolean; url: string }> {
@@ -66,6 +78,7 @@ export async function engineStatus(): Promise<{ reachable: boolean; url: string 
 }
 
 export async function submitWorkflow(workflow: Record<string, unknown>): Promise<string> {
+  await ensureEngineReady()
   const data = await fetchJson(`${getSettings().engineUrl}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -74,36 +87,48 @@ export async function submitWorkflow(workflow: Record<string, unknown>): Promise
   return data.prompt_id as string
 }
 
-/** 平涂色块化工作流（制版风格化第一步，纯原生节点，毫秒级）。
- *  双产物：色块层（EmbyColorBlockStylize）+ 线稿层（EmbyLineArtExtract，从色块边界提取）。
- *  节点 id 固定，供渲染进程展示节点级进度。 */
-export function buildStylizeWorkflow(imagePath: string, maxColors = 8): Record<string, unknown> {
-  return {
+/** 色块工作流：先去除边缘连通背景，再平滑限色；线稿存在时作为闭合区域引导。 */
+export function buildColorBlocksWorkflow(imagePath: string, lineArtPath?: string | null, maxColors = 8): Record<string, unknown> {
+  const workflow: Record<string, unknown> = {
     load: { class_type: 'LoadImage', inputs: { image: imagePath } },
-    stylize: { class_type: 'EmbyColorBlockStylize', inputs: { image: ['load', 0], max_colors: maxColors, smooth: 1 } },
-    lineart: { class_type: 'EmbyLineArtExtract', inputs: { image: ['stylize', 0], thickness: 1 } },
-    save: { class_type: 'SaveImage', inputs: { images: ['stylize', 0], filename_prefix: 'open_emby_stylize' } },
+    background: { class_type: 'EmbyBackgroundRemove', inputs: { image: ['load', 0], tolerance: 24 } }
+  }
+  if (lineArtPath) {
+    workflow.loadLine = { class_type: 'LoadImage', inputs: { image: lineArtPath } }
+    workflow.blocks = { class_type: 'EmbyColorBlockFromLineArt', inputs: { image: ['background', 0], line_art: ['loadLine', 0], max_colors: maxColors, smooth: 3 } }
+  } else {
+    workflow.blocks = { class_type: 'EmbyColorBlockStylize', inputs: { image: ['background', 0], max_colors: maxColors, smooth: 3 } }
+  }
+  workflow.saveBlocks = { class_type: 'SaveImage', inputs: { images: ['blocks', 0], filename_prefix: 'open_emby_blocks' } }
+  return workflow
+}
+
+/** 线稿工作流：只读取当前色块，独立提取边界。 */
+export function buildLineArtWorkflow(colorBlocksPath: string): Record<string, unknown> {
+  return {
+    loadBlocks: { class_type: 'LoadImage', inputs: { image: colorBlocksPath } },
+    lineart: { class_type: 'EmbyLineArtExtract', inputs: { image: ['loadBlocks', 0], thickness: 1, contrast: 1 } },
     saveLine: { class_type: 'SaveImage', inputs: { images: ['lineart', 0], filename_prefix: 'open_emby_lineart' } }
   }
 }
 
-/** 提交工作流并等待完成。通过 /ws 推送节点级进度（借鉴 ComfyUI 前端机制），双层结果转 data URL。 */
-export async function stylizeImage(
-  localPath: string,
-  opts: { maxColors?: number },
+/** 提交单产物工作流并等待完成，通过 /ws 推送节点级进度。 */
+async function runImageWorkflow(
+  workflow: Record<string, unknown>,
+  outputNode: string,
   onEvent?: (ev: EngineProgressEvent) => void
-): Promise<StylizeResult> {
+): Promise<string> {
+  await ensureEngineReady()
   const url = getSettings().engineUrl
   const wsUrl = url.replace(/^http/, 'ws') + '/ws'
-  const workflow = buildStylizeWorkflow(localPath, opts.maxColors)
 
-  return new Promise<StylizeResult>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const ws = new WebSocket(wsUrl)
     let promptId: string | null = null
     let settled = false
     const timer = setTimeout(() => finish(new Error('引擎生成超时（120s）')), 120_000)
 
-    const finish = (err: Error | null, result?: StylizeResult) => {
+    const finish = (err: Error | null, result?: string) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -122,11 +147,6 @@ export async function stylizeImage(
       const buf = Buffer.from(await res.arrayBuffer())
       return `data:image/png;base64,${buf.toString('base64')}`
     }
-
-    const fetchResult = async (pid: string): Promise<StylizeResult> => ({
-      colorBlocks: await fetchImage(pid, 'save'),
-      lineArt: await fetchImage(pid, 'saveLine')
-    })
 
     ws.on('open', () => {
       submitWorkflow(workflow)
@@ -153,7 +173,7 @@ export async function stylizeImage(
               break
             case 'execution_success':
               if (!promptId) break
-              try { finish(null, await fetchResult(promptId)) } catch (e) { finish(e as Error) }
+              try { finish(null, await fetchImage(promptId, outputNode)) } catch (e) { finish(e as Error) }
               break
             case 'execution_error': {
               const msgText = d.exception_message ?? '未知错误'
@@ -173,8 +193,24 @@ export async function stylizeImage(
   })
 }
 
+export function generateColorBlocks(
+  imagePath: string,
+  opts: { lineArtPath?: string | null; maxColors?: number },
+  onEvent?: (ev: EngineProgressEvent) => void
+): Promise<string> {
+  return runImageWorkflow(buildColorBlocksWorkflow(imagePath, opts.lineArtPath, opts.maxColors), 'saveBlocks', onEvent)
+}
+
+export function generateLineArt(
+  colorBlocksPath: string,
+  onEvent?: (ev: EngineProgressEvent) => void
+): Promise<string> {
+  return runImageWorkflow(buildLineArtWorkflow(colorBlocksPath), 'saveLine', onEvent)
+}
+
 /** 上传图片到引擎 input 目录（LoadImage 按文件名引用时可用；绝对路径可跳过） */
 export async function uploadImage(localPath: string): Promise<string> {
+  await ensureEngineReady()
   const fd = new FormData()
   fd.append('image', new Blob([readFileSync(localPath)]), basename(localPath))
   const data = await fetchJson(`${getSettings().engineUrl}/upload/image`, { method: 'POST', body: fd })

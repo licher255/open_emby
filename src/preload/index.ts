@@ -22,8 +22,10 @@ const api = {
     status: () => ipcRenderer.invoke(IpcChannels.engineStatus),
     submitWorkflow: (wf: Record<string, unknown>) =>
       ipcRenderer.invoke(IpcChannels.engineSubmitWorkflow, wf),
-    stylize: (imagePath: string, maxColors?: number) =>
-      ipcRenderer.invoke(IpcChannels.engineStylize, { imagePath, maxColors }),
+    generateColorBlocks: (imagePath: string, lineArtPath?: string | null, maxColors?: number): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateColorBlocks, { imagePath, lineArtPath, maxColors }),
+    generateLineArt: (colorBlocksPath: string): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateLineArt, { colorBlocksPath }),
     onProgress: (cb: (ev: EngineProgressEvent) => void) => {
       const l = (_e: unknown, ev: EngineProgressEvent) => cb(ev)
       ipcRenderer.on(IpcChannels.engineProgress, l)
@@ -40,6 +42,10 @@ const api = {
     create: (name: string) => ipcRenderer.invoke(IpcChannels.projectCreate, name),
     images: (projectId: string): Promise<import('@shared/types').ProjectImage[]> =>
       ipcRenderer.invoke(IpcChannels.projectImages, projectId),
+    archiveImage: (projectId: string, imagePath: string): Promise<void> =>
+      ipcRenderer.invoke(IpcChannels.projectArchiveImage, { projectId, imagePath }),
+    renameImage: (projectId: string, imagePath: string, name: string): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.projectRenameImage, { projectId, imagePath, name }),
     importImage: (projectId: string, srcPath: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannels.projectImportImage, { projectId, srcPath }),
     saveImage: (projectId: string, dataUrl: string, stem: string, kind?: string, derivedFrom?: string): Promise<string> =>
@@ -53,13 +59,21 @@ const api = {
       ipcRenderer.invoke(IpcChannels.projectHistory, projectId),
     restore: (projectId: string, oid: string): Promise<void> =>
       ipcRenderer.invoke(IpcChannels.projectRestore, { projectId, oid })
+    ,
+    canvasAdjust: (projectId: string, imagePath: string, widthMm: number, heightMm: number, mode: string): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.projectCanvasAdjust, { projectId, imagePath, widthMm, heightMm, mode })
   },
   sidecar: {
     status: () => ipcRenderer.invoke(IpcChannels.sidecarStatus),
-    digitizePlan: (imagePath: string, intent: string) =>
-      ipcRenderer.invoke(IpcChannels.sidecarDigitizePlan, { imagePath, intent }),
-    digitizeStitches: (imagePath: string, maxColors?: number, widthMm?: number): Promise<import('@shared/types').StitchResult> =>
-      ipcRenderer.invoke(IpcChannels.sidecarDigitizeStitches, { imagePath, maxColors, widthMm }),
+    digitizePlan: (imagePath: string, intent: string, widthMm?: number) =>
+      ipcRenderer.invoke(IpcChannels.sidecarDigitizePlan, { imagePath, intent, widthMm }),
+    digitizeStitches: (
+      imagePath: string,
+      maxColors?: number,
+      widthMm?: number,
+      postProcess?: { minStitchMm: number; maxStitchMm: number; curveToleranceMm: number }
+    ): Promise<import('@shared/types').StitchResult> =>
+      ipcRenderer.invoke(IpcChannels.sidecarDigitizeStitches, { imagePath, maxColors, widthMm, ...postProcess }),
     export: (req: ExportRequest) => ipcRenderer.invoke(IpcChannels.sidecarExport, req)
   },
   models: {

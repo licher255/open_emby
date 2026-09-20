@@ -1,6 +1,6 @@
 /** 项目库：工业制版软件的工作单元。
  *  布局：<dataRoot>/projects/<id>/project.json + images/（导入的图稿与风格化产出） */
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs'
 import { basename, extname, join } from 'path'
 import { randomUUID } from 'crypto'
 import type { ProjectImage, ProjectImageKind, ProjectInfo } from '@shared/types'
@@ -32,6 +32,7 @@ interface ImageManifestEntry {
   kind: ProjectImageKind
   derivedFrom?: string
   createdAt: string
+  archivedAt?: string
 }
 
 function manifestPath(id: string): string {
@@ -65,7 +66,6 @@ function imageFiles(id: string): ProjectImage[] {
   const manifest = new Map(readManifest(id).map((e) => [e.name, e]))
   return readdirSync(dir)
     .filter((f) => IMG_EXT.has(extname(f).toLowerCase()))
-    .sort()
     .map((f) => {
       const e = manifest.get(f)
       return {
@@ -73,9 +73,11 @@ function imageFiles(id: string): ProjectImage[] {
         name: f,
         kind: e?.kind ?? inferKind(f),
         derivedFrom: e?.derivedFrom,
-        createdAt: e?.createdAt ?? ''
+        createdAt: e?.createdAt ?? statSync(join(dir, f)).mtime.toISOString()
       }
     })
+    .filter((image) => !manifest.get(image.name)?.archivedAt)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 export function listProjects(): ProjectInfo[] {
@@ -102,6 +104,65 @@ export async function createProject(name: string): Promise<ProjectInfo> {
 
 export function listProjectImages(id: string): ProjectImage[] {
   return imageFiles(id)
+}
+
+/** 归档图片：只从工作台隐藏，不删除原文件，仍可通过 Git 历史恢复。 */
+export async function archiveProjectImage(id: string, imagePath: string): Promise<void> {
+  if (!readMeta(id)) throw new Error(`项目不存在: ${id}`)
+  const name = basename(imagePath)
+  const file = join(projectDir(id), 'images', name)
+  if (!existsSync(file)) throw new Error(`图片不存在: ${name}`)
+  const entries = readManifest(id)
+  const entry = entries.find((item) => item.name === name)
+  if (entry) {
+    entry.archivedAt = new Date().toISOString()
+  } else {
+    entries.push({ name, kind: inferKind(name), createdAt: statSync(file).mtime.toISOString(), archivedAt: new Date().toISOString() })
+  }
+  writeManifest(id, entries)
+  await commitAll(projectDir(id), `Archive image ${name}`)
+}
+
+/** 重命名图片并同步 manifest 谱系和工作台中的绝对路径；扩展名始终沿用原文件。 */
+export async function renameProjectImage(id: string, imagePath: string, requestedName: string): Promise<string> {
+  if (!readMeta(id)) throw new Error(`项目不存在: ${id}`)
+  const dir = join(projectDir(id), 'images')
+  const oldName = basename(imagePath)
+  const oldPath = join(dir, oldName)
+  if (!existsSync(oldPath)) throw new Error(`图片不存在: ${oldName}`)
+  const extension = extname(oldName)
+  const stem = basename(requestedName.trim(), extname(requestedName.trim()))
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .slice(0, 120)
+  if (!stem) throw new Error('图片名称不能为空')
+  const newName = `${stem}${extension}`
+  const newPath = join(dir, newName)
+  if (newName === oldName) return oldPath
+  if (existsSync(newPath)) throw new Error(`已存在同名图片: ${newName}`)
+
+  renameSync(oldPath, newPath)
+  const entries = readManifest(id)
+  if (!entries.some((entry) => entry.name === oldName)) {
+    entries.push({ name: oldName, kind: inferKind(oldName), createdAt: statSync(newPath).mtime.toISOString() })
+  }
+  for (const entry of entries) {
+    if (entry.name === oldName) entry.name = newName
+    if (entry.derivedFrom === oldName) entry.derivedFrom = newName
+  }
+  writeManifest(id, entries)
+
+  const statePath = join(projectDir(id), 'state.json')
+  const state = loadProjectState(id) as (Record<string, unknown> & { plan?: { imagePath?: string } }) | null
+  if (state) {
+    for (const key of ['imagePath', 'stylizedPath', 'lineArtPath']) {
+      if (state[key] === oldPath) state[key] = newPath
+    }
+    if (state.plan?.imagePath === oldPath) state.plan.imagePath = newPath
+    writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf-8')
+  }
+  await commitAll(projectDir(id), `Rename image ${oldName} to ${newName}`)
+  return newPath
 }
 
 /** 导入图片到项目（复制进项目 images/，重名自动加序号） */
@@ -155,6 +216,35 @@ export async function saveProjectState(id: string, state: Record<string, unknown
 /** 项目版本历史（新→旧） */
 export function projectHistory(id: string): Promise<CommitInfo[]> {
   return logCommits(projectDir(id))
+}
+
+/** 画布调整：sidecar 调用 Rust canvas_resize，结果登记为 original 资产（记录来源与物理尺寸） */
+export async function canvasAdjust(
+  id: string,
+  srcPath: string,
+  widthMm: number,
+  heightMm: number,
+  mode: string
+): Promise<string> {
+  if (!readMeta(id)) throw new Error(`项目不存在: ${id}`)
+  const dir = join(projectDir(id), 'images')
+  mkdirSync(dir, { recursive: true })
+  const ext = extname(srcPath) || '.png'
+  // 避免重复应用画布后文件名无限叠加 _100x100mm。
+  const stem = basename(srcPath, extname(srcPath)).replace(/(?:_\d+(?:\.\d+)?x\d+(?:\.\d+)?mm)+$/i, '')
+  let name = `${stem}_${widthMm}x${heightMm}mm${ext}`
+  let n = 1
+  while (existsSync(join(dir, name))) name = `${stem}_${widthMm}x${heightMm}mm_${n++}${ext}`
+  const dest = join(dir, name)
+  const res = await fetch(`${getSettings().sidecarUrl}/canvas/resize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imagePath: srcPath, destPath: dest, widthMm, heightMm, mode })
+  })
+  if (!res.ok) throw new Error(`画布调整失败: ${res.status} ${await res.text()}`)
+  registerImage(id, name, 'original', basename(srcPath))
+  await commitAll(projectDir(id), `Canvas ${widthMm}×${heightMm}mm (${mode})`)
+  return dest
 }
 
 /** 回退到指定版本（内容恢复为新提交，不丢历史） */

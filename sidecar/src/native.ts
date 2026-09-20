@@ -48,10 +48,11 @@ export interface StitchResult {
 
 interface EmbyCore {
   analyzeImage(path: string, maxColors: number, widthMm: number): AnalysisResult
-  generateStitches(imagePath: string, maxColors: number, widthMm: number): StitchResult
+  generateStitches(imagePath: string, maxColors: number, widthMm: number, minStitchMm: number, maxStitchMm: number, curveToleranceMm: number): StitchResult
   phash(path: string): string
   dstEncode(records: StitchRecord[], name: string): Buffer
   saveResizedPng(src: string, dst: string, size: number): void
+  canvasResize(src: string, dst: string, widthMm: number, heightMm: number, mode: string): void
 }
 
 let core: EmbyCore | null = null

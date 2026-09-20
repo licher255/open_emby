@@ -17,12 +17,6 @@ export interface EngineProgressEvent {
   max?: number
 }
 
-/** 风格化双产物：色块层 + 线稿层（data URL） */
-export interface StylizeResult {
-  colorBlocks: string
-  lineArt: string
-}
-
 /** 制版方案 —— Agent 产出，用户可交互调整 */
 export interface DigitizePlan {
   imagePath: string
@@ -65,8 +59,16 @@ export interface ProjectState {
   imagePath?: string | null
   stylizedPath?: string | null
   lineArtPath?: string | null
+  canvasMm?: { width: number; height: number } | null // 画布物理尺寸（决定针迹行距/补针基准）
   plan?: DigitizePlan | null
   stitches?: StitchResult | null
+  stitchPostProcess?: StitchPostProcess
+}
+
+export interface StitchPostProcess {
+  minStitchMm: number
+  maxStitchMm: number
+  curveToleranceMm: number
 }
 
 export interface StitchRegion {
