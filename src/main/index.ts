@@ -33,7 +33,7 @@ function createWindow(): void {
     show: false,
     title: 'open_emby — AI 刺绣制版',
     icon: iconPath,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#e6eaf0',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#202020' : '#f3f3f3',
     frame: false, // 无边框：自绘标题栏（renderer/Titlebar.tsx）
     titleBarStyle: 'hidden',
     webPreferences: {

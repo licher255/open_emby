@@ -1,31 +1,33 @@
-/* open_emby design tokens —— 苹果式克制：干净留白、发丝描边、字重层级、单一品牌蓝 */
+/* open_emby · Codex-inspired desktop workspace. Keep DESIGN.md in sync. */
 :root {
   color-scheme: light;
 
-  /* brand —— Emby Blue，只用于主行动、选中态、进行中 */
-  --primary: #2727e6;
-  --primary-hover: #1e1ecc;
-  --primary-active: #1616be;
-  --primary-tint: rgba(39, 39, 230, 0.08);
+  /* 蓝色仅用于主要动作、焦点与进行中；导航用中性灰 */
+  --primary: #286fe8;
+  --primary-hover: #205fc9;
+  --primary-active: #194fae;
+  --primary-tint: #e8f2ff;
   --on-primary: #ffffff;
 
-  /* text —— 苹果式三级文字 */
-  --ink: #1d1d1f;        /* 主文字 */
-  --body: #424245;       /* 正文 */
-  --muted: #6e6e73;      /* 次要 */
-  --muted-soft: #86868b; /* 辅助/读数 */
+  --ink: #292a2d;
+  --body: #505154;
+  --muted: #737478;
+  --muted-soft: #797a7e;
 
-  /* surfaces —— 白卡片 + 浅灰底，发丝描边取代厚重阴影 */
-  --bg: #f5f5f7;         /* 应用底色（苹果灰） */
+  /* 外壳 → 侧栏 → 工作区，靠底色与细线区分 */
+  --bg: #f3f3f3;
+  --sidebar: #fafafa;
   --card: #ffffff;
+  --selected: #ededed;
   --fill: rgba(0, 0, 0, 0.04);      /* 弱填充：hover、轨道 */
   --fill-strong: rgba(0, 0, 0, 0.08);
   --hairline: rgba(0, 0, 0, 0.08);
   --hairline-strong: rgba(0, 0, 0, 0.16);
 
   /* shadows —— 极轻，只给浮层 */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.025);
+  --shadow-soft: 0 3px 18px rgba(0, 0, 0, 0.045);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04);
 
   /* thread palette —— 只用于状态/角色标记，不做装饰 */
   --thread-yellow: #ffda00;
@@ -35,42 +37,48 @@
   --thread-warm-blue: #91d8ec;
   --thread-red: #e5484d;
 
-  /* fonts —— 系统字体优先（苹果语言），mono 只给技术读数 */
+  /* 系统字体；mono 只给技术读数 */
   --font-text: -apple-system, 'SF Pro Text', 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-disp: -apple-system, 'SF Pro Display', 'Inter', 'Segoe UI', 'PingFang SC', sans-serif;
   --font-mono: 'SF Mono', 'IBM Plex Mono', 'Cascadia Mono', monospace;
 
-  /* radii —— 收紧 */
-  --r-xs: 6px; --r-sm: 8px; --r-md: 10px; --r-lg: 14px; --r-full: 9999px;
+  /* 嵌套圆角随内边距递减，不把所有控件变成胶囊 */
+  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 18px;
+  --r-xl: 24px; --r-composer: 28px; --r-full: 9999px;
+  --rail-width: 56px; --sidebar-width: 252px; --workspace-radius: 18px;
 
   /* spacing */
   --sp-xxs: 4px; --sp-xs: 8px; --sp-sm: 12px; --sp-base: 16px;
   --sp-md: 24px; --sp-lg: 32px; --sp-xl: 48px;
 }
 
-/* dark —— 跟随系统外观（HIG: 尊重系统设置）；同一套 token 语义，只换取值 */
+/* 保留系统深色支持，布局与圆角不变；图稿使用自身底色 */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
 
-    --primary: #5e5ce6;
-    --primary-hover: #6d6df0;
-    --primary-active: #7d7df5;
-    --primary-tint: rgba(94, 92, 230, 0.18);
+    --primary: #82b1ff;
+    --primary-hover: #a0c4ff;
+    --primary-active: #bad4ff;
+    --primary-tint: #273a53;
+    --on-primary: #16253c;
 
     --ink: #f5f5f7;
     --body: #d2d2d7;
     --muted: #98989d;
     --muted-soft: #86868b;
 
-    --bg: #1c1c1e;
-    --card: #2c2c2e;
+    --bg: #202020;
+    --sidebar: #262626;
+    --card: #2c2c2c;
+    --selected: #393939;
     --fill: rgba(255, 255, 255, 0.08);
     --fill-strong: rgba(255, 255, 255, 0.14);
     --hairline: rgba(255, 255, 255, 0.14);
     --hairline-strong: rgba(255, 255, 255, 0.24);
 
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-soft: 0 3px 18px rgba(0, 0, 0, 0.2);
     --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
   }
 }

@@ -35,6 +35,8 @@ import layerGroup from '../assets/icons/layer-group.svg?raw'
 import trashCan from '../assets/icons/trash-can.svg?raw'
 
 const ICONS = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" fill="none"/></svg>',
+  sidebar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="3" fill="none"/><path d="M9 4v16" fill="none"/></svg>',
   plus,
   'folder-open': folderOpen,
   gear,
@@ -76,6 +78,7 @@ export default function Icon({ name, size = 14 }: { name: IconName; size?: numbe
   return (
     <span
       className="icon"
+      aria-hidden="true"
       style={{ width: size, height: size }}
       dangerouslySetInnerHTML={{ __html: ICONS[name] }}
     />

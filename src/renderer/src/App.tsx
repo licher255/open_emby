@@ -102,7 +102,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <Titlebar
-        page={pageTitle}
         canBack={hist.idx > 0}
         canForward={hist.idx < hist.stack.length - 1}
         onBack={navBack}
@@ -113,8 +112,34 @@ export default function App() {
       <Toasts />
       <DialogHost />
       <div className="app">
+        <aside className="activity-rail" aria-label={t('menu.view')}>
+          <button className={`rail-button ${view.kind === 'home' ? 'active' : ''}`} title={t('app.page.projects')} aria-label={t('app.page.projects')} aria-current={view.kind === 'home' ? 'page' : undefined} onClick={() => navTo({ kind: 'home' })}>
+            <Icon name="home" size={21} />
+          </button>
+          <button className="rail-button" title={t('app.newProject')} aria-label={t('app.newProject')} onClick={() => setCreating(true)}>
+            <Icon name="plus" size={19} />
+          </button>
+          <div className="rail-spacer" />
+          <button className={`rail-button ${view.kind === 'settings' ? 'active' : ''}`} title={t('app.settings')} aria-label={t('app.settings')} aria-current={view.kind === 'settings' ? 'page' : undefined} onClick={() => navTo({ kind: 'settings' })}>
+            <Icon name="gear" size={19} />
+          </button>
+          <div className="rail-help">
+            <button className={`rail-button ${helpOpen ? 'active' : ''}`} title={t('help.title')} aria-label={t('help.title')} aria-expanded={helpOpen} onClick={() => setHelpOpen(!helpOpen)}>
+              <Icon name="circle-question" size={20} />
+            </button>
+            {helpOpen && (
+              <div className="help-pop">
+                <div className="help-pop-title">{t('help.title')}</div>
+                <button onClick={() => { setHelpOpen(false); window.open(`${REPO}/issues`) }}>{t('menu.feedback')}</button>
+                <button onClick={() => { setHelpOpen(false); window.open(`${REPO}/issues/new`) }}>{t('menu.feature')}</button>
+                <button onClick={() => { setHelpOpen(false); window.open(REPO) }}>{t('menu.docs')}</button>
+              </div>
+            )}
+          </div>
+        </aside>
+        <div className="workspace-frame">
         {sidebarVisible && (
-        <nav>
+        <nav className="project-sidebar" aria-label={t('app.projects')}>
           <div className="nav-brand">open<em>emby</em></div>
 
           {/* 顶部主行动（Codex 侧栏语言：新建在最上） */}
@@ -129,6 +154,7 @@ export default function App() {
               <div key={p.id} className="nav-project">
               <button
                 className={view.kind === 'editor' && view.project.id === p.id ? 'active' : ''}
+                aria-current={view.kind === 'editor' && view.project.id === p.id ? 'page' : undefined}
                 onClick={() => navTo({ kind: 'editor', project: p })}
                   title={p.name}
                 >
@@ -145,6 +171,7 @@ export default function App() {
                         <button
                           key={sid}
                           className={`nav-step ${wb.activeStep === sid ? 'active' : ''}`}
+                          aria-current={wb.activeStep === sid ? 'step' : undefined}
                           onClick={() => wb.setActiveStep(sid)}
                         >
                           <span className={`nav-step-dot ${info?.done ? 'done' : ''}`}>
@@ -172,40 +199,15 @@ export default function App() {
             )}
           </div>
 
-          {/* 底部：设置沉底 */}
-          <div className="nav-bottom">
-            <button
-              className={`nav-bottom-btn ${view.kind === 'settings' ? 'active' : ''}`}
-              data-tip={t('app.settings')}
-              onClick={() => navTo({ kind: 'settings' })}
-            >
-              <Icon name="gear" />
-            </button>
-            <button
-              className={`nav-bottom-btn ${helpOpen ? 'active' : ''}`}
-              data-tip={t('help.title')}
-              onClick={() => setHelpOpen(!helpOpen)}
-            >
-              <Icon name="circle-question" />
-            </button>
-            {helpOpen && (
-              <div className="help-pop">
-                <div className="help-pop-title">{t('help.title')}</div>
-                <button onClick={() => { setHelpOpen(false); window.open(`${REPO}/issues`) }}>
-                  {t('menu.feedback')}
-                </button>
-                <button onClick={() => { setHelpOpen(false); window.open(`${REPO}/issues/new`) }}>
-                  {t('menu.feature')}
-                </button>
-                <button onClick={() => { setHelpOpen(false); window.open(REPO) }}>
-                  {t('menu.docs')}
-                </button>
-              </div>
-            )}
-          </div>
         </nav>
         )}
-        <main className={view.kind === 'editor' && wb.activeStep === 'stylize' ? 'canvas-main' : ''} style={{ zoom }}>
+        <div className="workspace-content" style={{ zoom }}>
+          <header className="workspace-header">
+            <span className="workspace-title" title={pageTitle}>{pageTitle}</span>
+            {view.kind === 'editor' && <span className="workspace-step">{t(STEP_KEY[wb.activeStep])}</span>}
+            <button className="tb-btn" title={t('app.newProject')} aria-label={t('app.newProject')} onClick={() => setCreating(true)}><Icon name="plus" size={17} /></button>
+          </header>
+        <main className={view.kind === 'editor' && wb.activeStep === 'stylize' ? 'canvas-main' : ''}>
           <Suspense fallback={<div className="page-loading">{t('settings.loading')}</div>}>
             {view.kind === 'editor' && (
               <Editor
@@ -224,6 +226,8 @@ export default function App() {
             )}
           </Suspense>
         </main>
+        </div>
+        </div>
       </div>
 
       {creating && (

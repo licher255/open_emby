@@ -11,7 +11,7 @@ interface Props {
 export default function Projects({ projects, onOpen, onCreate }: Props) {
   const t = useT()
   return (
-    <div>
+    <div className="projects-page">
       <header className="editor-head">
         <h1>{t('projects.title')}</h1>
       </header>

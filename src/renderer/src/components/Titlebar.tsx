@@ -9,7 +9,6 @@ export type MenuAction =
   | 'about' | 'feedback' | 'feature' | 'docs'
 
 interface Props {
-  page: string
   canBack: boolean
   canForward: boolean
   onBack: () => void
@@ -27,7 +26,7 @@ const MENUS: Array<{ id: 'file' | 'edit' | 'view' | 'help'; items: Array<MenuAct
 ]
 
 /** 自绘标题栏：侧栏开关 + 前进/后退 + 菜单栏 + 当前页面 + 窗口控制。整条可拖拽。 */
-export default function Titlebar({ page, canBack, canForward, onBack, onForward, onToggleSidebar, onMenuAction }: Props) {
+export default function Titlebar({ canBack, canForward, onBack, onForward, onToggleSidebar, onMenuAction }: Props) {
   const t = useT()
   const [maximized, setMaximized] = useState(false)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
@@ -58,14 +57,14 @@ export default function Titlebar({ page, canBack, canForward, onBack, onForward,
     <div className="titlebar" ref={barRef}>
       <div className="titlebar-left">
         <div className="titlebar-nav">
-          <button className="tb-btn" data-tip={t('menu.toggleSidebar')} onClick={onToggleSidebar}>
-            <Icon name="bars" size={13} />
-          </button>
-          <button className="tb-btn" data-tip={t('menu.back')} disabled={!canBack} onClick={onBack}>
+          <button className="tb-btn" title={t('menu.back')} aria-label={t('menu.back')} disabled={!canBack} onClick={onBack}>
             <Icon name="arrow-left" size={13} />
           </button>
-          <button className="tb-btn" data-tip={t('menu.forward')} disabled={!canForward} onClick={onForward}>
+          <button className="tb-btn" title={t('menu.forward')} aria-label={t('menu.forward')} disabled={!canForward} onClick={onForward}>
             <Icon name="arrow-right" size={13} />
+          </button>
+          <button className="tb-btn" title={t('menu.toggleSidebar')} aria-label={t('menu.toggleSidebar')} onClick={onToggleSidebar}>
+            <Icon name="sidebar" size={17} />
           </button>
         </div>
         <div className="tb-menus">
@@ -101,7 +100,6 @@ export default function Titlebar({ page, canBack, canForward, onBack, onForward,
             </div>
           ))}
         </div>
-        <span className="titlebar-page">{page}</span>
       </div>
       <div className="titlebar-controls">
         <button className="win-btn" title={t('win.minimize')} onClick={() => window.openEmby.window.minimize()}>
