@@ -7,6 +7,8 @@ sidecar/dist/
 crates/**/target/
 crates/**/node_modules/
 crates/**/*.node
+/build/
+/docs/
 crates/**/index.js
 crates/**/index.d.ts
 .DS_Store
