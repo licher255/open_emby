@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { loadCore, type StitchPoint, type StitchRecord } from '../native.js'
 
 /** 绝对坐标针迹点 → DST 相对位移记录 */
-function toRecords(points: StitchPoint[]): StitchRecord[] {
+export function toRecords(points: StitchPoint[]): StitchRecord[] {
   const out: StitchRecord[] = []
   let cx = 0
   let cy = 0
@@ -14,9 +14,12 @@ function toRecords(points: StitchPoint[]): StitchRecord[] {
       out.push({ dxMm: 0, dyMm: 0, flag: 2 })
       continue
     }
-    out.push({ dxMm: p.x - cx, dyMm: p.y - cy, flag: p.flag })
-    cx = p.x
-    cy = p.y
+    // Quantize absolute needle positions first so rounding errors do not accumulate along curves.
+    const x = Math.round(p.x * 10) / 10
+    const y = Math.round(p.y * 10) / 10
+    out.push({ dxMm: x - cx, dyMm: y - cy, flag: p.flag })
+    cx = x
+    cy = y
   }
   return out
 }
@@ -36,7 +39,7 @@ export function exportStitches(
     throw new Error(`暂不支持格式 ${format}（当前 dst；pes/jef 编解码器将在 crates/emby-core 扩展）`)
   }
   if (!points?.length) throw new Error('没有可导出的针迹（请先生成针迹）')
-  const safe = (name.replace(/[^a-zA-Z0-9_]/g, '_') || 'design').slice(0, 16)
+  const safe = (name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '') || 'design').slice(0, 100)
   const buf = loadCore().dstEncode(toRecords(points), safe)
   const path = join(outDir, `${safe}.dst`)
   writeFileSync(path, buf)

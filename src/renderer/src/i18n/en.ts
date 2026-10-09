@@ -25,6 +25,11 @@ export const en = {
   // ---- 编辑器：阶段 ----
   'step.import': 'Import artwork',
   'step.stylize': 'Line art & color blocks',
+  'settings.draftBackend': 'Initial draft',
+  'settings.draftQwen': 'AI draft + color cleanup',
+  'settings.draftNative': 'Basic color blocks',
+  'settings.draftHint': 'AI drafts require a running ComfyUI service with Qwen Image 2.1 models. First load can take several minutes.',
+  'settings.saveDraft': 'Save URL',
   'step.plan': 'Digitizing plan',
   'step.stitches': 'Stitches & preview',
   'step.export': 'Export files',

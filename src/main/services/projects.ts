@@ -87,7 +87,9 @@ export function listProjects(): ProjectInfo[] {
   for (const id of readdirSync(root)) {
     const meta = readMeta(id)
     if (!meta) continue
-    out.push({ ...meta, imageCount: imageFiles(id).length })
+    const images = imageFiles(id)
+    const cover = [...images].reverse().find(image => image.kind === 'stylized') ?? images[0]
+    out.push({ ...meta, imageCount: images.length, coverPath: cover?.path })
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }

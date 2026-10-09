@@ -59,6 +59,7 @@ app.whenReady().then(async () => {
     await checkLayout('home 1440 × 900')
     await shot('home-light')
     await click('.nav-project > button')
+    await click('.studio-advanced')
     await waitFor('.dropzone-slot')
     await checkLayout('import project')
     assert.equal(await evaluate(`getComputedStyle(document.querySelector('.nav-step.active')).borderRadius`), '10px')

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { StitchResult } from '@shared/types'
 import StitchPreview from '../../components/StitchPreview'
-import { useT } from '../../i18n'
+import { useI18n, useT } from '../../i18n'
 
 const StitchPreview3D = lazy(() => import('../../components/StitchPreview3D'))
 
@@ -19,7 +19,10 @@ interface Props {
 /** 针迹步骤：后处理参数 + 2D/3D 仿真 + 可绣性检查 + 换色层 */
 export default function StitchesStep({ stitches, busy, hasSource, stitchPost, onStitchPostChange, onMakeStitches }: Props) {
   const t = useT()
+  const zh = useI18n(s => s.locale) === 'zh-CN'
   const [view3d, setView3d] = useState(false)
+  const [showUnderlay, setShowUnderlay] = useState(false)
+  const [highlightTravel, setHighlightTravel] = useState(false)
   const [progress100, setProgress100] = useState(100)
   const [hiddenLayers, setHiddenLayers] = useState<Set<number>>(new Set())
 
@@ -78,7 +81,7 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
         <strong>{t('stitch.postProcess')}</strong>
         <label>
           {t('stitch.minLength')}
-          <input type="number" min={0.1} max={5} step={0.1} value={stitchPost.min} onChange={(e) => onStitchPostChange({ ...stitchPost, min: e.target.value })} />
+          <input type="number" min={0.1} max={2} step={0.1} value={stitchPost.min} onChange={(e) => onStitchPostChange({ ...stitchPost, min: e.target.value })} />
           <span>mm</span>
         </label>
         <label>
@@ -86,13 +89,8 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
           <input type="number" min={Math.max(0.2, (Number(stitchPost.min) || 0.1) * 2)} max={12} step={0.1} value={stitchPost.max} onChange={(e) => onStitchPostChange({ ...stitchPost, max: e.target.value })} />
           <span>mm</span>
         </label>
-        <label>
-          {t('stitch.curveTolerance')}
-          <input type="number" min={0.01} max={2} step={0.05} value={stitchPost.tolerance} onChange={(e) => onStitchPostChange({ ...stitchPost, tolerance: e.target.value })} />
-          <span>mm</span>
-        </label>
       </div>
-      <p className="mono-meta stitch-post-hint">{t('stitch.postProcessHint')}</p>
+      <p className="mono-meta stitch-post-hint">{zh ? '按区域方案生成针迹。短针阈值用于筛除过短填针跨度并提示短针；边界转向点会保留。长针按最大针长拆分，错位落针不会被曲线简化删除。' : 'Stitches follow the object plan. The short-stitch threshold filters tiny fill spans and flags short stitches; boundary turns are retained. Long stitches are split without erasing staggered penetration points.'}</p>
       <div className="editor-actions">
         <button className="btn-pill" disabled={!!busy || !hasSource} onClick={onMakeStitches}>
           {busy === 'stitch' ? t('editor.stitching') : t('editor.stitch')}
@@ -107,16 +105,18 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
             <div className="stitch-layout">
               <div>
                 <div className="view-tabs">
+                  <label><input type="checkbox" checked={showUnderlay} onChange={e => setShowUnderlay(e.target.checked)} />{zh ? '显示底针（导出始终保留）' : 'Show underlay (always exported)'}</label>
+                  <label><input type="checkbox" checked={highlightTravel} onChange={e => setHighlightTravel(e.target.checked)} />{zh ? '突出内部走线（粉色）' : 'Highlight travel (pink)'}</label>
                   <button className={view3d ? '' : 'active'} onClick={() => setView3d(false)}>{t('stitch.view2d')}</button>
                   <button className={view3d ? 'active' : ''} onClick={() => setView3d(true)}>{t('stitch.view3d')}</button>
                 </div>
                 {view3d ? (
                   <Suspense fallback={<div className="stitch-3d mono-meta">{t('settings.loading')}</div>}>
-                    <StitchPreview3D stitches={stitches} hidden={hiddenLayers} />
+                    <StitchPreview3D stitches={stitches} hidden={hiddenLayers} showUnderlay={showUnderlay} highlightTravel={highlightTravel} />
                   </Suspense>
                 ) : (
                   <>
-                    <StitchPreview stitches={stitches} progress={progress100 / 100} hidden={hiddenLayers} />
+                    <StitchPreview stitches={stitches} progress={progress100 / 100} hidden={hiddenLayers} showUnderlay={showUnderlay} highlightTravel={highlightTravel} />
                     <div className="scrub-row">
                       <span className="mono-meta">{t('stitch.progress')}</span>
                       <input type="range" min={0} max={100} value={progress100} onChange={(e) => setProgress100(Number(e.target.value))} />
@@ -127,6 +127,12 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
               </div>
               <div className="stitch-side">
                 <h3>{t('stitch.checks')}</h3>
+                {stitches.method?.backend === 'paper' && <p className="mono-meta">{zh ? '精细流线覆盖面积' : 'Paper-covered area'}: {Math.round((stitches.method.paperAreaRatio ?? 0) * 100)}% · {stitches.method.paperRegions} {zh ? '个区域；其余细节采用基础针法' : 'regions; remaining details use native stitches'}</p>}
+                {stitches.quality && <div className="quality-report">
+                  <p>{zh ? '最大针长' : 'Longest stitch'}: {stitches.quality.maxLengthMm.toFixed(2)} mm · {zh ? '跳针' : 'Jumps'}: {stitches.quality.jumpCount}</p>
+                  <p>{zh ? '跳针总长 / 内部走线' : 'Jump / internal travel length'}: {(stitches.quality.jumpLengthMm ?? 0).toFixed(0)} / {(stitches.quality.travelLengthMm ?? 0).toFixed(0)} mm</p>
+                  {stitches.quality.warnings.map((note, i) => <p key={i}>{note}</p>)}
+                </div>}
                 <ul className="check-list">
                   {checks.map((c, i) => <li key={i} className={`check-${c.level}`}>{c.text}</li>)}
                 </ul>

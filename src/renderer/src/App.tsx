@@ -163,7 +163,7 @@ export default function App() {
                   <span className="nav-item-meta">{t('projects.imageCount', { count: p.imageCount })}</span>
                 </button>
                 {/* 活动项目的步骤树（项目树内嵌） */}
-                {view.kind === 'editor' && view.project.id === p.id && (
+                {view.kind === 'editor' && view.project.id === p.id && wb.expertMode && (
                   <div className="nav-steps">
                     {STEP_ORDER.map((sid) => {
                       const info = wb.steps.find((s) => s.id === sid)
@@ -204,10 +204,10 @@ export default function App() {
         <div className="workspace-content" style={{ zoom }}>
           <header className="workspace-header">
             <span className="workspace-title" title={pageTitle}>{pageTitle}</span>
-            {view.kind === 'editor' && <span className="workspace-step">{t(STEP_KEY[wb.activeStep])}</span>}
+            {view.kind === 'editor' && wb.expertMode && <span className="workspace-step">{t(STEP_KEY[wb.activeStep])}</span>}
             <button className="tb-btn" title={t('app.newProject')} aria-label={t('app.newProject')} onClick={() => setCreating(true)}><Icon name="plus" size={17} /></button>
           </header>
-        <main className={view.kind === 'editor' && wb.activeStep === 'stylize' ? 'canvas-main' : ''}>
+        <main className={view.kind === 'editor' ? (wb.expertMode && wb.activeStep === 'stylize' ? 'canvas-main' : !wb.expertMode ? 'studio-main' : '') : ''}>
           <Suspense fallback={<div className="page-loading">{t('settings.loading')}</div>}>
             {view.kind === 'editor' && (
               <Editor

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { ArtworkObjects } from '../../src/shared/types.js'
 
 // dev(tsx/ESM): import.meta 可用；prod(esbuild CJS bundle): import.meta 为空对象，走 EMBY_CORE_NODE
 let here = ''
@@ -47,6 +48,9 @@ export interface StitchResult {
 }
 
 interface EmbyCore {
+  analyzeArtwork(path: string, maxColors: number, widthMm: number): ArtworkObjects
+  stitchArtwork(plan: ArtworkObjects, minStitchMm: number, maxStitchMm: number): StitchResult
+  compositeRegion(original: string, edited: string, destination: string, plan: ArtworkObjects, label: number): void
   analyzeImage(path: string, maxColors: number, widthMm: number): AnalysisResult
   generateStitches(imagePath: string, maxColors: number, widthMm: number, minStitchMm: number, maxStitchMm: number, curveToleranceMm: number): StitchResult
   phash(path: string): string

@@ -5,6 +5,9 @@
 mod dst;
 mod img;
 mod stitch;
+mod objects;
+mod orientation;
+mod travel;
 
 pub use dst::{dst_encode, StitchRecord};
 pub use img::{analyze_image, canvas_resize, phash, save_resized_png, AnalysisResult, StitchRegion};

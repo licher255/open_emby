@@ -23,6 +23,9 @@ pub struct StitchPoint {
 
 #[napi(object)]
 pub struct StitchResult {
+    /// Half-open command ranges for underlay; remains in exported machine data.
+    pub underlay_ranges: Option<Vec<u32>>,
+    pub travel_ranges: Option<Vec<u32>>,
     pub points: Vec<StitchPoint>,
     pub palette: Vec<String>,
     pub width_mm: f64,
@@ -170,6 +173,8 @@ pub fn generate_stitches(
     let stitch_count = points.iter().filter(|p| p.flag == FLAG_STITCH).count() as u32;
 
     Ok(StitchResult {
+        underlay_ranges: None,
+        travel_ranges: None,
         points,
         palette,
         width_mm: (width_mm * 10.0).round() / 10.0,

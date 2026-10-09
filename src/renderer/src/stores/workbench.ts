@@ -10,6 +10,8 @@ export interface StepInfo {
 
 /** 工作台共享状态：Editor 发布步骤树，App 侧边栏渲染并驱动切换 */
 interface WorkbenchState {
+  expertMode: boolean
+  setExpertMode: (value: boolean) => void
   steps: StepInfo[]
   activeStep: StepId
   historyCount: number
@@ -21,6 +23,8 @@ interface WorkbenchState {
 }
 
 export const useWorkbench = create<WorkbenchState>((set) => ({
+  expertMode: false,
+  setExpertMode: (expertMode) => set({ expertMode }),
   steps: [],
   activeStep: 'import',
   historyCount: 0,

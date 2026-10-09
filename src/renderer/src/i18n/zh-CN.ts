@@ -27,6 +27,11 @@ export const zhCN: Messages = {
   // ---- 编辑器：阶段 ----
   'step.import': '导入图稿',
   'step.stylize': '线稿与色块',
+  'settings.draftBackend': '初稿生成',
+  'settings.draftQwen': 'AI 初稿 + 色块清理',
+  'settings.draftNative': '基础色块处理',
+  'settings.draftHint': 'AI 初稿需要启动 ComfyUI 并安装 Qwen Image 2.1 模型。首次加载可能需要几分钟。',
+  'settings.saveDraft': '保存地址',
   'step.plan': '制版方案',
   'step.stitches': '针迹与预览',
   'step.export': '导出文件',

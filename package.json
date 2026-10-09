@@ -1,6 +1,6 @@
 {
   "name": "open_emby",
-  "version": "0.0.1-beta",
+  "version": "0.0.2-beta",
   "description": "AI embroidery digitizing studio — turn any picture into embroidery",
   "main": "out/main/index.js",
   "license": "SEE LICENSE IN LICENSE",
@@ -11,7 +11,8 @@
     "dist": "electron-vite build && pnpm --dir sidecar run bundle && electron-builder",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "sidecar": "pnpm --dir sidecar run dev",
-    "core:build": "pnpm --dir crates/emby-core run build",
+    "dehaze": "node scripts/dehaze.mjs",
+    "core:build": "node scripts/build-core.mjs",
     "engine:build": "node scripts/build-engine.mjs",
     "engine:dev": "cargo run --manifest-path crates/emby-engine/Cargo.toml",
     "setup": "pnpm install && pnpm --dir sidecar install && pnpm --dir crates/emby-core install && pnpm run core:build && pnpm run engine:build"

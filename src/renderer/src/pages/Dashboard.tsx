@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useEnvStore } from '../stores/env'
 import { LOCALES, useI18n, useT, type Locale } from '../i18n'
 import type { LocaleKey } from '../i18n/en'
-import type { ModelInfo, PluginManifest } from '@shared/types'
+import type { AppSettings, ModelInfo, PluginManifest } from '@shared/types'
 import { MODEL_LINEUP } from '@shared/modelLineup'
 import Icon, { type IconName } from '../components/Icon'
 import { toast } from '../stores/toast'
@@ -35,11 +35,13 @@ export default function Dashboard() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [plugins, setPlugins] = useState<PluginManifest[]>([])
   const [tab, setTab] = useState<SettingsTab>('general')
+  const [draftSettings, setDraftSettings] = useState<AppSettings | null>(null)
 
   useEffect(() => {
     refresh()
     window.openEmby.models.list().then(setModels).catch(() => {})
     window.openEmby.plugins.list().then(setPlugins).catch(() => {})
+    window.openEmby.settings.get().then(setDraftSettings).catch(() => {})
   }, [refresh])
 
   async function changeLocale(l: Locale) {
@@ -95,6 +97,31 @@ export default function Dashboard() {
           {tab === 'backend' && (
             <div className="card">
               <h2>{t('settings.backend')}</h2>
+              {draftSettings && (
+                <div>
+                  <label>{t('settings.draftBackend')} <select value={draftSettings.draftBackend} onChange={async (e) => {
+                    const draftBackend = e.target.value as AppSettings['draftBackend']
+                    try { setDraftSettings(await window.openEmby.settings.set({ draftBackend })) }
+                    catch (error) { toast.error(String(error)) }
+                  }}>
+                    <option value="qwen">{t('settings.draftQwen')}</option>
+                    <option value="native">{t('settings.draftNative')}</option>
+                  </select></label>
+                  <p>{t('settings.draftHint')}</p>
+                  <label>ComfyUI URL <input value={draftSettings.comfyUrl} onChange={(e) => setDraftSettings({ ...draftSettings, comfyUrl: e.target.value })} /></label>
+                  <button className="btn-outline btn-sm" onClick={async () => {
+                    try {
+                      const url = new URL(draftSettings.comfyUrl)
+                      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('HTTP(S) URL required')
+                      setDraftSettings(await window.openEmby.settings.set({ comfyUrl: url.href.replace(/\/$/, '') }))
+                    } catch (error) { toast.error(String(error)) }
+                  }}>{t('settings.saveDraft')}</button>
+                  <details className="studio-more"><summary>{locale === 'zh-CN' ? '本地生成环境（高级）' : 'Local generation environment (advanced)'}</summary><div>
+                    {(['comfyPythonPath', 'comfyMainPath', 'paperPythonPath', 'paperRepoPath'] as const).map(key => <label key={key}>{({ comfyPythonPath: 'ComfyUI Python', comfyMainPath: 'ComfyUI main.py', paperPythonPath: 'Paper Python', paperRepoPath: 'Paper repository' })[key]}<input value={draftSettings[key] ?? ''} placeholder={locale === 'zh-CN' ? '留空自动查找' : 'Auto-detect when blank'} onChange={e => setDraftSettings({ ...draftSettings, [key]: e.target.value })} /></label>)}
+                    <button className="btn-outline btn-sm" onClick={async () => { try { setDraftSettings(await window.openEmby.settings.set({ comfyPythonPath: draftSettings.comfyPythonPath, comfyMainPath: draftSettings.comfyMainPath, paperPythonPath: draftSettings.paperPythonPath, paperRepoPath: draftSettings.paperRepoPath })); toast.info(locale === 'zh-CN' ? '已保存，重启软件后生效。' : 'Saved. Restart the application to apply.') } catch (error) { toast.error(String(error)) } }}>{locale === 'zh-CN' ? '保存环境' : 'Save environment'}</button>
+                  </div></details>
+                </div>
+              )}
               {status ? (
                 <>
                   <p>

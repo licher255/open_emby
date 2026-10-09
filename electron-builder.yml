@@ -16,6 +16,8 @@ extraResources:
     to: bin/emby-core.win32-x64-msvc.node
   - from: sidecar/dist/sidecar.cjs
     to: sidecar/sidecar.cjs
+  - from: sidecar/workers
+    to: sidecar/workers
   - from: plugins
     to: plugins
 asar: true

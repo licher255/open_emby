@@ -9,19 +9,29 @@ import { useT } from '../i18n'
 const THREAD_R = 0.18 // 绣线半径
 
 interface Props {
+  highlightTravel?: boolean
+  showUnderlay?: boolean
   stitches: StitchResult
   hidden: Set<number>
 }
 
 /** 把针迹序列切成按颜色分组的线段（mm 坐标） */
-function buildSegments(stitches: StitchResult, hidden: Set<number>): Map<number, Array<[number, number, number, number]>> {
+function buildSegments(stitches: StitchResult, hidden: Set<number>, showUnderlay: boolean, highlightTravel: boolean): Map<number, Array<[number, number, number, number]>> {
   const segs = new Map<number, Array<[number, number, number, number]>>()
   let px = 0
   let py = 0
-  for (const p of stitches.points) {
-    if (p.flag === 0 && !hidden.has(p.color)) {
-      let list = segs.get(p.color)
-      if (!list) { list = []; segs.set(p.color, list) }
+  const underlay = new Uint8Array(stitches.points.length)
+  const travel = new Uint8Array(stitches.points.length)
+  const travelRanges = stitches.travelRanges ?? []
+  if (highlightTravel) for (let j = 0; j < travelRanges.length; j += 2) travel.fill(1, travelRanges[j], travelRanges[j + 1])
+  const ranges = stitches.underlayRanges ?? []
+  if (!showUnderlay) for (let j = 0; j < ranges.length; j += 2) underlay.fill(1, ranges[j], ranges[j + 1])
+  for (let i = 0; i < stitches.points.length; i++) {
+    const p = stitches.points[i]
+    if (p.flag === 0 && !hidden.has(p.color) && (!underlay[i] || travel[i])) {
+      const color = travel[i] ? -1 : p.color
+      let list = segs.get(color)
+      if (!list) { list = []; segs.set(color, list) }
       list.push([px, py, p.x, p.y])
     }
     if (p.flag !== 2) { px = p.x; py = p.y }
@@ -30,7 +40,7 @@ function buildSegments(stitches: StitchResult, hidden: Set<number>): Map<number,
 }
 
 /** 构建场景：布料底板 + 每色一个 InstancedMesh（胶囊体线迹） */
-function buildScene(stitches: StitchResult, hidden: Set<number>): THREE.Group {
+function buildScene(stitches: StitchResult, hidden: Set<number>, showUnderlay: boolean, highlightTravel: boolean): THREE.Group {
   const group = new THREE.Group()
   const { widthMm, heightMm } = stitches
 
@@ -45,14 +55,14 @@ function buildScene(stitches: StitchResult, hidden: Set<number>): THREE.Group {
   group.add(fabric)
 
   // 线迹：胶囊沿 Y 轴，旋转到线段方向，scale.y 拉伸到线段长度
-  const capsule = new THREE.CapsuleGeometry(THREAD_R, 1, 3, 6)
+  const capsule = new THREE.CylinderGeometry(THREAD_R, THREAD_R, 1, 6)
   const dummy = new THREE.Object3D()
   const up = new THREE.Vector3(0, 1, 0)
   const dir = new THREE.Vector3()
 
-  for (const [color, list] of buildSegments(stitches, hidden)) {
+  for (const [color, list] of buildSegments(stitches, hidden, showUnderlay, highlightTravel)) {
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(stitches.palette[color] ?? '#888888'),
+      color: new THREE.Color(color === -1 ? '#e33269' : stitches.palette[color] ?? '#888888'),
       roughness: 0.55,
       metalness: 0.05
     })
@@ -64,8 +74,8 @@ function buildScene(stitches: StitchResult, hidden: Set<number>): THREE.Group {
       const len = Math.hypot(dx, dz)
       dir.set(dx, 0, dz).normalize()
       dummy.quaternion.setFromUnitVectors(up, dir)
-      // 行间微小的上下交错，模拟线迹叠压的厚度感
-      const lift = THREAD_R * 0.95 + (Math.round(y0 * 4) % 2) * 0.035
+      // Every cylinder ends at actual needle positions; no artificial row-dependent texture.
+      const lift = THREAD_R
       dummy.position.set((x0 + x1) / 2, lift, (y0 + y1) / 2)
       dummy.scale.set(1, Math.max(len, 0.05), 1)
       dummy.updateMatrix()
@@ -78,7 +88,7 @@ function buildScene(stitches: StitchResult, hidden: Set<number>): THREE.Group {
 }
 
 /** 3D 针迹预览：线迹是有厚度的胶囊体，可旋转缩放；支持导出 GLB */
-export default function StitchPreview3D({ stitches, hidden }: Props) {
+export default function StitchPreview3D({ stitches, hidden, showUnderlay = false, highlightTravel = false }: Props) {
   const t = useT()
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<{ scene: THREE.Scene; group: THREE.Group } | null>(null)
@@ -147,7 +157,7 @@ export default function StitchPreview3D({ stitches, hidden }: Props) {
   useEffect(() => {
     const ctx = sceneRef.current
     if (!ctx) return
-    const group = buildScene(stitches, hidden)
+    const group = buildScene(stitches, hidden, showUnderlay, highlightTravel)
     ctx.scene.add(group)
     ctx.group = group
     return () => {
@@ -161,7 +171,7 @@ export default function StitchPreview3D({ stitches, hidden }: Props) {
         }
       })
     }
-  }, [stitches, hidden])
+  }, [stitches, hidden, showUnderlay, highlightTravel])
 
   function exportGlb() {
     const ctx = sceneRef.current

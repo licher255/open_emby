@@ -5,9 +5,10 @@ import { spawn, type ChildProcess } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { basename, join } from 'path'
 import WebSocket from 'ws'
-import type { EngineProgressEvent } from '@shared/types'
+import type { ColorBlocksResult, EngineProgressEvent } from '@shared/types'
 import { getSettings } from './settings'
 import { stopProcessTree } from './processTree'
+import { generateDraft } from './draft'
 
 let proc: ChildProcess | null = null
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -58,8 +59,12 @@ async function fetchJson(url: string, init?: RequestInit): Promise<any> {
 }
 
 async function ensureEngineReady(): Promise<void> {
-  if (!proc) startEngine(() => {})
   const url = getSettings().engineUrl
+  try {
+    const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(500) })
+    if (response.ok) return
+  } catch { /* start our engine if no service is already listening */ }
+  if (!proc) startEngine(() => {})
   for (let attempt = 0; attempt < 30; attempt++) {
     try {
       const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(300) })
@@ -196,12 +201,22 @@ async function runImageWorkflow(
   })
 }
 
-export function generateColorBlocks(
+export async function generateColorBlocks(
   imagePath: string,
-  opts: { lineArtPath?: string | null; maxColors?: number },
+  opts: { lineArtPath?: string | null; maxColors?: number; intent?: string },
   onEvent?: (ev: EngineProgressEvent) => void
-): Promise<string> {
-  return runImageWorkflow(buildColorBlocksWorkflow(imagePath, opts.lineArtPath, opts.maxColors), 'saveBlocks', onEvent)
+): Promise<ColorBlocksResult> {
+  const settings = getSettings()
+  const maxColors = opts.maxColors ?? 8
+  let draft: string | undefined
+  if (!opts.lineArtPath && settings.draftBackend === 'qwen') {
+    imagePath = await generateDraft(imagePath, {
+      url: settings.comfyUrl, dataRoot: settings.dataRoot, maxColors, intent: opts.intent
+    }, onEvent)
+    draft = `data:image/png;base64,${readFileSync(imagePath).toString('base64')}`
+  }
+  const colorBlocks = await runImageWorkflow(buildColorBlocksWorkflow(imagePath, opts.lineArtPath, maxColors), 'saveBlocks', onEvent)
+  return { colorBlocks, draft }
 }
 
 export function generateLineArt(

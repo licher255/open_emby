@@ -33,11 +33,15 @@ export function startSidecar(onLog: (line: string) => void): void {
   proc = spawn(cmd, args, {
     cwd: sidecarDir(),
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
     detached: process.platform !== 'win32',
     env: {
       ...process.env,
       OPEN_EMBY_DATA_ROOT: getSettings().dataRoot,
       OPEN_EMBY_SIDECAR_PORT: url.port || '8100',
+      OPEN_EMBY_PAPER_WORKER: join(sidecarDir(), 'workers/paper_digitize.py'),
+      ...(getSettings().paperPythonPath ? { OPEN_EMBY_PAPER_PYTHON: getSettings().paperPythonPath } : {}),
+      ...(getSettings().paperRepoPath ? { OPEN_EMBY_PAPER_REPO: getSettings().paperRepoPath } : {}),
       // prod: ELECTRON_RUN_AS_NODE 让 Electron 作为纯 Node 运行 sidecar bundle
       ...(app.isPackaged ? {
         ELECTRON_RUN_AS_NODE: '1',
@@ -68,6 +72,11 @@ export async function sidecarStatus(): Promise<{ running: boolean; url: string }
 }
 
 async function ensureSidecarReady(): Promise<void> {
+  if ((await sidecarStatus()).running) {
+    const health = await (await fetch(`${getSettings().sidecarUrl}/health`, { signal: AbortSignal.timeout(3000) })).json()
+    if (health.apiRevision !== 'studio-paper-v1') throw new Error('检测到旧版生成服务，请关闭旧版 open_emby 后重新打开。')
+    return
+  }
   if (!proc) startSidecar(() => {})
   const url = getSettings().sidecarUrl
   for (let attempt = 0; attempt < 30; attempt++) {

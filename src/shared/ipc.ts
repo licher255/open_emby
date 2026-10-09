@@ -6,6 +6,8 @@ export const IpcChannels = {
   engineStatus: 'engine:status',
   engineSubmitWorkflow: 'engine:submit-workflow',
   engineGenerateColorBlocks: 'engine:generate-color-blocks',
+  engineGenerateDraft: 'engine:generate-draft',
+  engineRepairRegion: 'engine:repair-region',
   engineGenerateLineArt: 'engine:generate-line-art',
   engineProgress: 'engine:progress', // main -> renderer push（结构化节点事件）
   // 文件
@@ -31,6 +33,7 @@ export const IpcChannels = {
   sidecarDigitizePlan: 'sidecar:digitize-plan',
   sidecarDigitizeStitches: 'sidecar:digitize-stitches',
   sidecarExport: 'sidecar:export',
+  sidecarExportSave: 'sidecar:export-save',
   // 模型管理
   modelList: 'models:list',
   modelDownload: 'models:download',

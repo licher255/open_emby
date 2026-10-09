@@ -3,11 +3,13 @@
  *  仅监听 127.0.0.1，由 Electron 主进程拉起。 */
 import Fastify from 'fastify'
 import multipart from '@fastify/multipart'
-import { plan as agentPlan } from './agent/core.js'
+import { plan as agentPlan, stitchPlan, sourceHash } from './agent/core.js'
+import type { AgentOptions, DigitizePlan } from '../../src/shared/types.js'
 import { exportStitches } from './exporters/index.js'
 import * as collector from './flywheel/collector.js'
 import * as training from './training/prepare.js'
 import { loadCore } from './native.js'
+import { paperStitches } from './agent/paper.js'
 
 const DATA_ROOT = process.env.OPEN_EMBY_DATA_ROOT ?? 'E:\\Project-刺绣机'
 const PORT = Number(process.env.OPEN_EMBY_SIDECAR_PORT ?? 8100)
@@ -17,16 +19,18 @@ async function main() {
 const app = Fastify({ logger: false, bodyLimit: 64 * 1024 * 1024 })
 await app.register(multipart)
 
-app.get('/health', async () => ({ ok: true, service: 'open_emby-sidecar', version: '0.1.0', runtime: 'node+rust' }))
+app.get('/health', async () => ({ ok: true, service: 'open_emby-sidecar', version: '0.2.0', apiRevision: 'studio-paper-v1', runtime: 'node+rust+paper-worker' }))
 
-interface PlanBody { imagePath: string; intent?: string; maxColors?: number; widthMm?: number }
+interface PlanBody { imagePath: string; intent?: string; maxColors?: number; widthMm?: number; fabric?: AgentOptions['fabric']; texture?: AgentOptions['texture'] }
 app.post('/digitize/plan', async (req) => {
   const b = req.body as PlanBody
-  return agentPlan(b.imagePath, b.intent ?? '', b.maxColors ?? 6, b.widthMm ?? 100)
+  return agentPlan(b.imagePath, b.intent ?? '', b.maxColors ?? 8, b.widthMm ?? 100, b.fabric, b.texture)
 })
 
 // 针迹生成：色块图 → 真实针迹序列（Rust 核心）
 interface StitchesBody {
+  backend?: 'paper' | 'native'
+  plan?: DigitizePlan
   imagePath: string
   maxColors?: number
   widthMm?: number
@@ -36,14 +40,16 @@ interface StitchesBody {
 }
 app.post('/digitize/stitches', async (req) => {
   const b = req.body as StitchesBody
-  return loadCore().generateStitches(
-    b.imagePath,
-    b.maxColors ?? 8,
-    b.widthMm ?? 100,
-    b.minStitchMm ?? 0.6,
-    b.maxStitchMm ?? 3.0,
-    b.curveToleranceMm ?? 0.15
-  )
+  const p = b.plan ?? agentPlan(b.imagePath, '', b.maxColors ?? 8, b.widthMm ?? 100)
+  if (b.backend === 'paper') return paperStitches(p, DATA_ROOT, b.minStitchMm ?? 0.3, b.maxStitchMm ?? 3.0)
+  return stitchPlan(p, b.minStitchMm ?? 0.3, b.maxStitchMm ?? 3.0)
+})
+
+app.post('/digitize/repair-region', async req => {
+  const b = req.body as { plan: DigitizePlan; edited: string; destination: string; label: number }
+  if (!b.plan.sourceHash || sourceHash(b.plan.imagePath) !== b.plan.sourceHash) throw new Error('图稿已变化，请重新分析区域。')
+  loadCore().compositeRegion(b.plan.imagePath, b.edited, b.destination, b.plan, b.label)
+  return { path: b.destination }
 })
 
 // 画布调整（物理尺寸 mm → 像素，fit/fill/stretch）

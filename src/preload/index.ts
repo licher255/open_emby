@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels } from '@shared/ipc'
-import type { AppSettings, EngineProgressEvent, ExportRequest } from '@shared/types'
+import type { AppSettings, ColorBlocksResult, EngineProgressEvent, ExportRequest } from '@shared/types'
 
 // 无边框窗口控制
 const windowControls = {
@@ -19,11 +19,15 @@ const windowControls = {
 const api = {
   envStatus: () => ipcRenderer.invoke(IpcChannels.envStatus),
   engine: {
+    generateDraft: (imagePath: string, maxColors: number, intent: string, style?: 'clean' | 'soft'): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateDraft, { imagePath, maxColors, intent, style }),
+    repairRegion: (plan: import('@shared/types').DigitizePlan, label: number, intent: string): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineRepairRegion, { plan, label, intent }),
     status: () => ipcRenderer.invoke(IpcChannels.engineStatus),
     submitWorkflow: (wf: Record<string, unknown>) =>
       ipcRenderer.invoke(IpcChannels.engineSubmitWorkflow, wf),
-    generateColorBlocks: (imagePath: string, lineArtPath?: string | null, maxColors?: number): Promise<string> =>
-      ipcRenderer.invoke(IpcChannels.engineGenerateColorBlocks, { imagePath, lineArtPath, maxColors }),
+    generateColorBlocks: (imagePath: string, lineArtPath?: string | null, maxColors?: number, intent?: string): Promise<ColorBlocksResult> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateColorBlocks, { imagePath, lineArtPath, maxColors, intent }),
     generateLineArt: (colorBlocksPath: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannels.engineGenerateLineArt, { colorBlocksPath }),
     onProgress: (cb: (ev: EngineProgressEvent) => void) => {
@@ -67,16 +71,19 @@ const api = {
   },
   sidecar: {
     status: () => ipcRenderer.invoke(IpcChannels.sidecarStatus),
-    digitizePlan: (imagePath: string, intent: string, widthMm?: number) =>
-      ipcRenderer.invoke(IpcChannels.sidecarDigitizePlan, { imagePath, intent, widthMm }),
+    digitizePlan: (imagePath: string, intent: string, widthMm?: number, maxColors?: number, fabric?: string, texture?: string): Promise<import('@shared/types').DigitizePlan> =>
+      ipcRenderer.invoke(IpcChannels.sidecarDigitizePlan, { imagePath, intent, widthMm, maxColors, fabric, texture }),
     digitizeStitches: (
       imagePath: string,
       maxColors?: number,
       widthMm?: number,
-      postProcess?: { minStitchMm: number; maxStitchMm: number; curveToleranceMm: number }
+      postProcess?: { minStitchMm: number; maxStitchMm: number; curveToleranceMm: number },
+      plan?: import('@shared/types').DigitizePlan,
+      backend?: 'paper' | 'native'
     ): Promise<import('@shared/types').StitchResult> =>
-      ipcRenderer.invoke(IpcChannels.sidecarDigitizeStitches, { imagePath, maxColors, widthMm, ...postProcess }),
+      ipcRenderer.invoke(IpcChannels.sidecarDigitizeStitches, { imagePath, maxColors, widthMm, ...postProcess, plan, backend }),
     export: (req: ExportRequest) => ipcRenderer.invoke(IpcChannels.sidecarExport, req)
+    ,exportSave: (req: Omit<ExportRequest, 'outDir'>): Promise<{ ok: boolean; files: string[] } | null> => ipcRenderer.invoke(IpcChannels.sidecarExportSave, req)
   },
   models: {
     list: () => ipcRenderer.invoke(IpcChannels.modelList)

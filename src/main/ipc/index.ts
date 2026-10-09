@@ -1,10 +1,12 @@
 import { app, ipcMain, dialog, BrowserWindow, nativeImage } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID, randomInt } from 'crypto'
 import { readFileSync, existsSync, statSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { basename, dirname, extname, join } from 'path'
 import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, DigitizePlan, EngineProgressEvent, ExportRequest, ProjectImageKind, StitchResult } from '@shared/types'
 import { getSettings, setSettings } from '../services/settings'
+import { generateDraft } from '../services/draft'
+import { ensureComfy, stopComfy } from '../services/comfy'
 import { engineStatus, generateColorBlocks, generateLineArt, startEngine, stopEngine, submitWorkflow } from '../services/engine'
 import { sidecarStatus, sidecarCall, startSidecar, stopSidecar } from '../services/sidecar'
 import { listModels } from '../services/modelManager'
@@ -26,14 +28,34 @@ export function registerIpc(): void {
   }))
 
   ipcMain.handle(IpcChannels.engineStatus, () => engineStatus())
+  ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft' }) => {
+    const s = getSettings()
+    if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', message: '正在准备图片生成服务…' })
+    await ensureComfy(s.comfyUrl, s.dataRoot, s.comfyPythonPath, s.comfyMainPath)
+    const path = await generateDraft(args.imagePath, { url: s.comfyUrl, dataRoot: s.dataRoot, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: randomInt(0, 0x100000000) })
+    return `data:image/png;base64,${readFileSync(path).toString('base64')}`
+  })
+  ipcMain.handle(IpcChannels.engineRepairRegion, async (_e, args: { plan: DigitizePlan; label: number; intent: string }) => {
+    const r = args.plan.regions.find(r => r.label === args.label)
+    if (!r || !args.intent?.trim() || args.intent.length > 1000) throw new Error('请选择区域并填写 1–1000 字修改要求')
+    const settings = getSettings()
+    await ensureComfy(settings.comfyUrl, settings.dataRoot, settings.comfyPythonPath, settings.comfyMainPath)
+    const edited = await generateDraft(args.plan.imagePath, {
+      url: settings.comfyUrl, dataRoot: settings.dataRoot, maxColors: args.plan.maxColors,
+      intent: `保持现有构图和位置。只修改位于画面横向 ${Math.round(r.xMm / args.plan.widthMm * 100)}%、纵向 ${Math.round(r.yMm / args.plan.heightMm * 100)}% 起的 ${r.color} 色区域。${args.intent}`
+    })
+    const destination = edited.replace(/draft\.png$/, 'region-edit.png')
+    await sidecarCall('/digitize/repair-region', { ...args, edited, destination })
+    return `data:image/png;base64,${readFileSync(destination).toString('base64')}`
+  })
   ipcMain.handle(IpcChannels.engineSubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
 
   const withEngineProgress = (e: Electron.IpcMainInvokeEvent) => {
     const win = e.sender
     return (ev: EngineProgressEvent) => { if (!win.isDestroyed()) win.send(IpcChannels.engineProgress, ev) }
   }
-  ipcMain.handle(IpcChannels.engineGenerateColorBlocks, (e, args: { imagePath: string; lineArtPath?: string | null; maxColors?: number }) => {
-    return generateColorBlocks(args.imagePath, { lineArtPath: args.lineArtPath, maxColors: args.maxColors }, withEngineProgress(e))
+  ipcMain.handle(IpcChannels.engineGenerateColorBlocks, (e, args: { imagePath: string; lineArtPath?: string | null; maxColors?: number; intent?: string }) => {
+    return generateColorBlocks(args.imagePath, { lineArtPath: args.lineArtPath, maxColors: args.maxColors, intent: args.intent }, withEngineProgress(e))
   })
   ipcMain.handle(IpcChannels.engineGenerateLineArt, (e, args: { colorBlocksPath: string }) => {
     return generateLineArt(args.colorBlocksPath, withEngineProgress(e))
@@ -102,6 +124,12 @@ export function registerIpc(): void {
     sidecarCall<StitchResult>('/digitize/stitches', args))
   ipcMain.handle(IpcChannels.sidecarExport, (_e, req: ExportRequest) =>
     sidecarCall<{ ok: boolean; files: string[] }>('/export', req))
+  ipcMain.handle(IpcChannels.sidecarExportSave, async (e, req: Omit<ExportRequest, 'outDir'>) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const result = await dialog.showSaveDialog(win!, { title: '保存刺绣文件', defaultPath: `${req.name}.dst`, filters: [{ name: 'Tajima embroidery', extensions: ['dst'] }] })
+    if (result.canceled || !result.filePath) return null
+    return sidecarCall<{ ok: boolean; files: string[] }>('/export', { ...req, name: basename(result.filePath, extname(result.filePath)), outDir: dirname(result.filePath) })
+  })
 
   ipcMain.handle(IpcChannels.modelList, () => listModels())
 
@@ -187,6 +215,7 @@ export function bootServices(onLog: (line: string) => void): void {
 }
 
 export function shutdownServices(): void {
+  stopComfy()
   stopSidecar()
   stopEngine()
 }

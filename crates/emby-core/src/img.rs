@@ -61,8 +61,8 @@ pub(crate) fn dist2(a: Lab, b: Lab) -> f64 {
 
 /// KMeans（k-means++ 初始化）
 pub(crate) fn kmeans(points: &[Lab], k: usize, iters: usize) -> (Vec<u32>, Vec<Lab>) {
-    use rand::Rng;
-    let mut rng = rand::rng();
+    use rand::{Rng, SeedableRng};
+    let mut rng = rand::rngs::StdRng::seed_from_u64(20261003);
     let n = points.len();
     let mut centers: Vec<Lab> = vec![points[rng.random_range(0..n)]];
     while centers.len() < k {
