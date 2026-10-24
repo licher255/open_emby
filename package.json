@@ -1,12 +1,13 @@
 {
   "name": "open_emby",
-  "version": "0.0.2-beta",
+  "version": "0.0.3-beta",
   "description": "AI embroidery digitizing studio — turn any picture into embroidery",
   "main": "out/main/index.js",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "preview:pack": "electron-vite build && electron-builder --win --dir --config electron-builder.preview.yml",
     "start": "electron-vite preview",
     "dist": "electron-vite build && pnpm --dir sidecar run bundle && electron-builder",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",

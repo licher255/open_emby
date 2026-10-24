@@ -31,10 +31,12 @@ export default function App() {
   const wb = useWorkbench()
 
   const navTo = useCallback((v: View) => {
+    if (useWorkbench.getState().taskBusy) return
     setView(v)
     setHist((h) => ({ stack: [...h.stack.slice(0, h.idx + 1), v], idx: h.idx + 1 }))
   }, [])
   const navBack = useCallback(() => {
+    if (useWorkbench.getState().taskBusy) return
     setHist((h) => {
       if (h.idx <= 0) return h
       setView(h.stack[h.idx - 1])
@@ -42,6 +44,7 @@ export default function App() {
     })
   }, [])
   const navForward = useCallback(() => {
+    if (useWorkbench.getState().taskBusy) return
     setHist((h) => {
       if (h.idx >= h.stack.length - 1) return h
       setView(h.stack[h.idx + 1])
@@ -51,7 +54,7 @@ export default function App() {
 
   const onMenuAction = useCallback((a: MenuAction) => {
     switch (a) {
-      case 'newProject': setCreating(true); break
+      case 'newProject': if (!useWorkbench.getState().taskBusy) setCreating(true); break
       case 'openSettings': navTo({ kind: 'settings' }); break
       case 'quit': window.openEmby.window.close(); break
       case 'undo': {
@@ -87,6 +90,7 @@ export default function App() {
   }, [creating])
 
   async function createProject() {
+    if (useWorkbench.getState().taskBusy) return
     const p = await window.openEmby.projects.create(newName.trim() || '未命名制版')
     setCreating(false)
     setNewName('')
@@ -102,8 +106,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <Titlebar
-        canBack={hist.idx > 0}
-        canForward={hist.idx < hist.stack.length - 1}
+        canBack={!wb.taskBusy && hist.idx > 0}
+        canForward={!wb.taskBusy && hist.idx < hist.stack.length - 1}
         onBack={navBack}
         onForward={navForward}
         onToggleSidebar={() => setSidebarVisible((v) => !v)}
@@ -116,7 +120,7 @@ export default function App() {
           <button className={`rail-button ${view.kind === 'home' ? 'active' : ''}`} title={t('app.page.projects')} aria-label={t('app.page.projects')} aria-current={view.kind === 'home' ? 'page' : undefined} onClick={() => navTo({ kind: 'home' })}>
             <Icon name="home" size={21} />
           </button>
-          <button className="rail-button" title={t('app.newProject')} aria-label={t('app.newProject')} onClick={() => setCreating(true)}>
+          <button className="rail-button" disabled={wb.taskBusy} title={t('app.newProject')} aria-label={t('app.newProject')} onClick={() => setCreating(true)}>
             <Icon name="plus" size={19} />
           </button>
           <div className="rail-spacer" />
@@ -143,7 +147,7 @@ export default function App() {
           <div className="nav-brand">open<em>emby</em></div>
 
           {/* 顶部主行动（Codex 侧栏语言：新建在最上） */}
-          <button className="nav-new" onClick={() => setCreating(true)}>
+          <button className="nav-new" disabled={wb.taskBusy} onClick={() => setCreating(true)}>
             <Icon name="plus" /> {t('app.newProject')}
           </button>
 
@@ -153,6 +157,7 @@ export default function App() {
             {projects.map((p) => (
               <div key={p.id} className="nav-project">
               <button
+                disabled={wb.taskBusy}
                 className={view.kind === 'editor' && view.project.id === p.id ? 'active' : ''}
                 aria-current={view.kind === 'editor' && view.project.id === p.id ? 'page' : undefined}
                 onClick={() => navTo({ kind: 'editor', project: p })}

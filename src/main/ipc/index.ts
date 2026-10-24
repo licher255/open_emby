@@ -28,11 +28,11 @@ export function registerIpc(): void {
   }))
 
   ipcMain.handle(IpcChannels.engineStatus, () => engineStatus())
-  ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft' }) => {
+  ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft'; seed?: number }) => {
     const s = getSettings()
     if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', message: '正在准备图片生成服务…' })
     await ensureComfy(s.comfyUrl, s.dataRoot, s.comfyPythonPath, s.comfyMainPath)
-    const path = await generateDraft(args.imagePath, { url: s.comfyUrl, dataRoot: s.dataRoot, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: randomInt(0, 0x100000000) })
+    const path = await generateDraft(args.imagePath, { url: s.comfyUrl, dataRoot: s.dataRoot, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: args.seed ?? randomInt(0, 0x100000000) })
     return `data:image/png;base64,${readFileSync(path).toString('base64')}`
   })
   ipcMain.handle(IpcChannels.engineRepairRegion, async (_e, args: { plan: DigitizePlan; label: number; intent: string }) => {

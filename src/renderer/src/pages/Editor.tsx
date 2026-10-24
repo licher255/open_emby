@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { AgentOptions, CommitInfo, DigitizePlan, EngineProgressEvent, ProjectImage, ProjectInfo, StitchPostProcess, StitchResult } from '@shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { AgentOptions, CommitInfo, DigitizePlan, DraftRound, EngineProgressEvent, ProjectImage, ProjectInfo, ProjectState, StitchPostProcess, StitchResult } from '@shared/types'
+import { createDraftRound, runDraftRound } from './editor/draftRounds'
 import { toast } from '../stores/toast'
 import { confirmDialog, promptDialog } from '../stores/dialog'
 import { useI18n, useT } from '../i18n'
@@ -29,6 +30,10 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const [agentOptions, setAgentOptions] = useState<AgentOptions>({ intent: '', maxColors: 6, widthMm: 100, fabric: 'woven', texture: 'flow', stitchBackend: 'paper', artStyle: 'clean' })
   const [agentStatus, setAgentStatus] = useState('')
   const [studioError, setStudioError] = useState('')
+  const [draftRounds, setDraftRounds] = useState<DraftRound[]>([])
+  const [draftUrls, setDraftUrls] = useState<Record<string, string>>({})
+  const [loaded, setLoaded] = useState(false)
+  const batchRunning = useRef(false)
   const [repairPreview, setRepairPreview] = useState<{ data: string; source: string } | null>(null)
   const activeStep = useWorkbench((s) => s.activeStep)
   const historyOpen = useWorkbench((s) => s.historyOpen)
@@ -45,6 +50,10 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const [stitches, setStitches] = useState<StitchResult | null>(null)
   const [exportFiles, setExportFiles] = useState<string[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // 'stage2' | 'blocks' | 'lineart' | 'plan' | 'stitch' | 'export' | 'import'
+  useEffect(() => {
+    useWorkbench.getState().setTaskBusy(!!busy)
+    return () => useWorkbench.getState().setTaskBusy(false)
+  }, [busy])
   const [progress, setProgress] = useState('')
   const [nodeStates, setNodeStates] = useState<Record<string, NodeState>>({})
   const [nodePct, setNodePct] = useState<{ value: number; max: number } | null>(null)
@@ -66,7 +75,9 @@ export default function Editor({ project, onProjectChanged }: Props) {
   /** 恢复上次保存的工作台状态（重新打开项目时） */
   const restoreState = useCallback(async () => {
     const s = await window.openEmby.projects.loadState(project.id)
-    if (!s) return
+    if (!s) { setLoaded(true); return }
+    setDraftRounds((s.draftRounds ?? []).map(r => ({ ...r, candidates: r.candidates.map(c =>
+      c.status === 'generating' || c.status === 'queued' ? { ...c, status: 'error' as const, error: '生成已中断，可补齐 / Interrupted; retry this round.' } : c) })))
     if (s.agentOptions) setAgentOptions({ stitchBackend: 'paper', artStyle: 'clean', ...s.agentOptions })
     if (s.stylizedPath) {
       setStylizedPath(s.stylizedPath)
@@ -98,6 +109,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       setCanvasW(String(s.canvasMm.width))
       setCanvasH(String(s.canvasMm.height))
     }
+    setLoaded(true)
   }, [project.id])
 
   useEffect(() => {
@@ -107,7 +119,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   }, [refreshImages, refreshHistory, restoreState])
 
   /** 保存工作台状态并留一个版本（Git 提交） */
-  const persist = useCallback(async (message: string, overrides: Partial<{ plan: DigitizePlan | null; stitches: StitchResult | null; stylizedPath: string | null; lineArtPath: string | null; imagePath: string | null; canvasMm: { width: number; height: number } | null; stitchPostProcess: StitchPostProcess }> = {}) => {
+  const persist = useCallback(async (message: string, overrides: Partial<ProjectState> = {}) => {
     const state = {
       imagePath: overrides.imagePath !== undefined ? overrides.imagePath : imagePath,
       stylizedPath: overrides.stylizedPath !== undefined ? overrides.stylizedPath : stylizedPath,
@@ -116,7 +128,8 @@ export default function Editor({ project, onProjectChanged }: Props) {
       plan: overrides.plan !== undefined ? overrides.plan : plan,
       stitches: overrides.stitches !== undefined ? overrides.stitches : stitches,
       stitchPostProcess: overrides.stitchPostProcess ?? getStitchPostProcess(),
-      agentOptions
+      agentOptions,
+      draftRounds: overrides.draftRounds ?? draftRounds
     }
     try {
       await window.openEmby.projects.saveState(project.id, state, message)
@@ -125,7 +138,17 @@ export default function Editor({ project, onProjectChanged }: Props) {
       toast.error(zh ? '保存没有完成，请检查磁盘空间。' : 'Could not save. Check available disk space.')
       throw e
     }
-  }, [project.id, imagePath, stylizedPath, lineArtPath, canvasMm, plan, stitches, stitchPost, agentOptions, refreshHistory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [project.id, imagePath, stylizedPath, lineArtPath, canvasMm, plan, stitches, stitchPost, agentOptions, draftRounds, refreshHistory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let cancelled = false
+    const paths = draftRounds.flatMap(r => r.candidates.flatMap(c => c.path && !(c.path in draftUrls) ? [c.path] : []))
+    if (paths.length) void Promise.all(paths.map(async path => {
+      const url = await window.openEmby.files.readImageDataUrl(path).catch(() => '')
+      return [path, url] as const
+    })).then(entries => { if (!cancelled) setDraftUrls(current => ({ ...current, ...Object.fromEntries(entries) })) })
+    return () => { cancelled = true }
+  }, [draftRounds, draftUrls])
 
   function getStitchPostProcess(): StitchPostProcess {
     const minStitchMm = Math.min(2, Math.max(0.1, Number(stitchPost.min) || 0.3))
@@ -152,7 +175,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       setCanvasMm({ width: w, height: h }) // selectImage 不重置 canvasMm
       setAgentOptions(v => ({ ...v, widthMm: w }))
       toast.success(t('toast.canvasDone', { w, h }))
-      await persist(`Canvas ${w}×${h}mm (${canvasMode})`, { imagePath: dest, canvasMm: { width: w, height: h }, plan: null, stitches: null, stylizedPath: null, lineArtPath: null })
+      await persist(`Canvas ${w}×${h}mm (${canvasMode})`, { imagePath: dest, canvasMm: { width: w, height: h }, plan: null, stitches: null, stylizedPath: null, lineArtPath: null, draftRounds: [] })
     } catch (err) {
       toast.error(t('toast.fail.canvas', { error: String(err) }))
     } finally {
@@ -190,6 +213,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   }, [])
 
   async function selectImage(path: string) {
+    setDraftRounds([]); setDraftUrls({}); setStudioError('')
     setImagePath(path)
     setImageUrl(await window.openEmby.files.readImageDataUrl(path))
     setStylizedUrl(null)
@@ -201,13 +225,16 @@ export default function Editor({ project, onProjectChanged }: Props) {
     setPlan(null)
     setNodeStates({})
     setNodePct(null)
-    await persist('Select reference image', { imagePath: path, stylizedPath: null, lineArtPath: null, plan: null, stitches: null })
+    await persist('Select reference image', { imagePath: path, stylizedPath: null, lineArtPath: null, plan: null, stitches: null, draftRounds: [] })
   }
 
   async function archiveAsset(img: ProjectImage) {
     if (!(await confirmDialog(t('editor.archiveConfirm', { name: img.name }), { danger: true }))) return
     try {
       await window.openEmby.projects.archiveImage(project.id, img.path)
+      const remainingRounds = img.path === imagePath ? [] : draftRounds.map(r => ({ ...r,
+        candidates: r.candidates.map(c => c.path === img.path ? { ...c, path: undefined, status: 'error' as const, error: '图稿已归档 / Artwork archived' } : c) }))
+      setDraftRounds(remainingRounds)
       if (img.path === imagePath) {
         const next = images.find((item) => item.path !== img.path && (item.kind === 'original' || item.kind === 'other'))
         if (next) {
@@ -221,14 +248,17 @@ export default function Editor({ project, onProjectChanged }: Props) {
           stylizedPath: null,
           lineArtPath: null,
           plan: null,
-          stitches: null
+          stitches: null,
+          draftRounds: []
         })
       } else if (img.path === stylizedPath) {
         setStylizedPath(null); setStylizedUrl(null); setLineArtPath(null); setLineArtUrl(null)
-        await persist(`Archive image ${img.name}`, { stylizedPath: null, lineArtPath: null, plan: null, stitches: null })
+        await persist(`Archive image ${img.name}`, { stylizedPath: null, lineArtPath: null, plan: null, stitches: null, draftRounds: remainingRounds })
       } else if (img.path === lineArtPath) {
         setLineArtPath(null); setLineArtUrl(null)
-        await persist(`Archive image ${img.name}`, { lineArtPath: null, stitches: null })
+        await persist(`Archive image ${img.name}`, { lineArtPath: null, stitches: null, draftRounds: remainingRounds })
+      } else {
+        await persist(`Archive image ${img.name}`, { draftRounds: remainingRounds })
       }
       await refreshImages()
       onProjectChanged()
@@ -245,9 +275,19 @@ export default function Editor({ project, onProjectChanged }: Props) {
     if (name == null || name === currentName) return
     try {
       const renamedPath = await window.openEmby.projects.renameImage(project.id, img.path, name)
+      const renamedRounds = draftRounds.map(r => ({ ...r,
+        originalPath: r.originalPath === img.path ? renamedPath : r.originalPath,
+        sourcePath: r.sourcePath === img.path ? renamedPath : r.sourcePath,
+        candidates: r.candidates.map(c => c.path === img.path ? { ...c, path: renamedPath } : c) }))
+      setDraftRounds(renamedRounds)
       if (img.path === imagePath) setImagePath(renamedPath)
       if (img.path === stylizedPath) setStylizedPath(renamedPath)
       if (img.path === lineArtPath) setLineArtPath(renamedPath)
+      await persist(`Rename image ${name}`, { draftRounds: renamedRounds,
+        imagePath: img.path === imagePath ? renamedPath : imagePath,
+        stylizedPath: img.path === stylizedPath ? renamedPath : stylizedPath,
+        lineArtPath: img.path === lineArtPath ? renamedPath : lineArtPath,
+        ...(img.path === (stylizedPath ?? imagePath) ? { plan: null, stitches: null } : {}) })
       await refreshImages()
       await refreshHistory()
       onProjectChanged()
@@ -266,7 +306,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       onProjectChanged()
       await selectImage(dest)
       toast.success(t('toast.imported'))
-      await persist('Import artwork', { imagePath: dest, plan: null, stitches: null, stylizedPath: null, lineArtPath: null })
+      await persist('Import artwork', { imagePath: dest, plan: null, stitches: null, stylizedPath: null, lineArtPath: null, draftRounds: [] })
     } catch (err) {
       toast.error(t('toast.fail.import', { error: String(err) }))
     } finally {
@@ -460,10 +500,63 @@ export default function Editor({ project, onProjectChanged }: Props) {
 
   // Save object edits after the user stops moving a slider; preserve exact masks and parameters.
   useEffect(() => {
-    if (!imagePath || busy) return
+    if (!loaded || !imagePath || busy || batchRunning.current) return
     const timer = setTimeout(() => { void persist('Update region plan').catch(() => {}) }, 800)
     return () => clearTimeout(timer)
-  }, [plan, busy, persist])
+  }, [plan, busy, persist, loaded])
+
+  async function generateChoices(feedback = '', refine = false, retryId?: string) {
+    if (!imagePath || busy || batchRunning.current) return
+    if (refine && (!stylizedPath || !feedback.trim())) return
+    let round: DraftRound
+    try {
+      const previous = draftRounds.find(r => r.candidates.some(c => c.path === stylizedPath))
+      round = retryId ? draftRounds.find(r => r.id === retryId)! : createDraftRound({
+        originalPath: imagePath, sourcePath: refine ? stylizedPath! : imagePath,
+        feedback: refine ? feedback.trim() : '',
+        intent: refine ? `${previous?.intent || agentOptions.intent}\n保持所选图案的主体与构图，按以下反馈微调：${feedback.trim()}` : agentOptions.intent,
+        maxColors: agentOptions.maxColors, style: agentOptions.artStyle ?? 'clean'
+      })
+      if (!round) return
+    } catch (error) { setStudioError(String(error)); return }
+    batchRunning.current = true
+    setBusy('drafts'); setStudioError('')
+    let rounds = retryId ? draftRounds : [...draftRounds, round]
+    const checkpoint = async (next: DraftRound) => {
+      rounds = rounds.map(r => r.id === next.id ? next : r)
+      setDraftRounds(rounds)
+      const index = next.candidates.findIndex(c => c.status === 'generating')
+      setAgentStatus(index >= 0 ? (zh ? `正在生成第 ${index + 1} / 4 张…` : `Creating option ${index + 1} of 4…`) : '')
+      await persist('Artwork choices · checkpoint', { draftRounds: rounds })
+    }
+    try {
+      await checkpoint(round)
+      const result = await runDraftRound(round, async seed => {
+        const data = await window.openEmby.engine.generateDraft(round.sourcePath, round.maxColors, round.intent, round.style, seed)
+        const path = await window.openEmby.projects.saveImage(project.id, data, 'ai_choice', 'stylized', round.sourcePath.split(/[\\/]/).pop())
+        setDraftUrls(urls => ({ ...urls, [path]: data }))
+        return path
+      }, checkpoint)
+      const failed = result.candidates.filter(c => c.status !== 'ready').length
+      if (failed) setStudioError(zh ? `${failed} 张未完成，已保留成功结果。可以补齐这一组。` : `${failed} options did not finish. Keep the results and retry the missing ones.`)
+      await refreshImages(); onProjectChanged()
+    } catch (error) { setStudioError(String(error)) }
+    finally { batchRunning.current = false; setBusy(null); setAgentStatus('') }
+  }
+
+  async function chooseArtwork(path: string) {
+    if (busy) return
+    setBusy('choose'); setStudioError('')
+    try {
+      const url = draftUrls[path] || await window.openEmby.files.readImageDataUrl(path)
+      const changed = stylizedPath !== path
+      await persist('Choose artwork for refinement', { stylizedPath: path,
+        ...(changed ? { lineArtPath: null, plan: null, stitches: null } : {}) })
+      setStylizedPath(path); setStylizedUrl(url)
+      if (changed) { setLineArtPath(null); setLineArtUrl(null); setPlan(null); setStitches(null); setExportFiles(null) }
+    } catch (error) { setStudioError(String(error)) }
+    finally { setBusy(null) }
+  }
 
   async function runAgent() {
     if (!imagePath || busy) return
@@ -505,7 +598,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   /** 生成针迹：对风格化色块图（没有则退回原图）跑 Rust 针迹生成器 */
   async function makeStitches() {
     const src = stylizedPath ?? imagePath
-    if (!src) return
+    if (!src || busy) return
     setBusy('stitch'); setExportFiles(null); setStudioError(''); setAgentStatus(zh ? '正在为当前绣稿生成针迹…' : 'Creating stitches for this artwork…')
     try {
       const postProcess = getStitchPostProcess()
@@ -563,8 +656,8 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const stage2Assets = images.filter((i) => i.kind === 'stylized' || i.kind === 'lineart')
 
   if (!expertMode) return <>
-    <Studio imageUrl={imageUrl} artworkUrl={stylizedUrl} stitches={stitches} options={agentOptions} busy={busy} status={agentStatus} error={studioError} files={exportFiles}
-      onOptions={next => { setAgentOptions(next); setPlan(null); setStitches(null); setExportFiles(null) }} onPick={pickImage} onImport={importIntoProject} onGenerate={runAgent} onResume={makeStitches} onExport={exportDst}
+    <Studio imageUrl={imageUrl} artworkUrl={stylizedUrl} selectedPath={stylizedPath} rounds={draftRounds} draftUrls={draftUrls} onChoose={chooseArtwork} onFeedback={text => generateChoices(text, true)} onRetry={id => generateChoices('', false, id)} stitches={stitches} options={agentOptions} busy={busy} status={agentStatus} error={studioError} files={exportFiles}
+      onOptions={next => { setAgentOptions(next); setPlan(null); setStitches(null); setExportFiles(null) }} onPick={pickImage} onImport={importIntoProject} onGenerate={() => generateChoices()} onResume={makeStitches} onExport={exportDst}
       onRefine={() => { setExpertMode(true); setActiveStep(plan ? 'plan' : stylizedPath ? 'stylize' : 'import') }} onHistory={() => useWorkbench.getState().setHistoryOpen(!historyOpen)} />
     {historyOpen && <HistoryPanel detailed history={history} onRestore={restoreVersion} />}
   </>

@@ -19,8 +19,8 @@ const windowControls = {
 const api = {
   envStatus: () => ipcRenderer.invoke(IpcChannels.envStatus),
   engine: {
-    generateDraft: (imagePath: string, maxColors: number, intent: string, style?: 'clean' | 'soft'): Promise<string> =>
-      ipcRenderer.invoke(IpcChannels.engineGenerateDraft, { imagePath, maxColors, intent, style }),
+    generateDraft: (imagePath: string, maxColors: number, intent: string, style?: 'clean' | 'soft', seed?: number): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateDraft, { imagePath, maxColors, intent, style, seed }),
     repairRegion: (plan: import('@shared/types').DigitizePlan, label: number, intent: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannels.engineRepairRegion, { plan, label, intent }),
     status: () => ipcRenderer.invoke(IpcChannels.engineStatus),

@@ -10,6 +10,8 @@ export interface StepInfo {
 
 /** 工作台共享状态：Editor 发布步骤树，App 侧边栏渲染并驱动切换 */
 interface WorkbenchState {
+  taskBusy: boolean
+  setTaskBusy: (value: boolean) => void
   expertMode: boolean
   setExpertMode: (value: boolean) => void
   steps: StepInfo[]
@@ -23,6 +25,8 @@ interface WorkbenchState {
 }
 
 export const useWorkbench = create<WorkbenchState>((set) => ({
+  taskBusy: false,
+  setTaskBusy: (taskBusy) => set({ taskBusy }),
   expertMode: false,
   setExpertMode: (expertMode) => set({ expertMode }),
   steps: [],

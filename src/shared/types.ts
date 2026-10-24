@@ -89,6 +89,7 @@ export interface CommitInfo {
 
 /** 项目工作台持久化状态（state.json，被版本库跟踪） */
 export interface ProjectState {
+  draftRounds?: DraftRound[]
   imagePath?: string | null
   stylizedPath?: string | null
   lineArtPath?: string | null
@@ -97,6 +98,27 @@ export interface ProjectState {
   stitches?: StitchResult | null
   stitchPostProcess?: StitchPostProcess
   agentOptions?: AgentOptions
+}
+
+/** Four independently sampled drafts, saved before the user chooses one to digitize. */
+export interface DraftCandidate {
+  id: string
+  seed: number
+  status: 'queued' | 'generating' | 'ready' | 'error'
+  path?: string
+  error?: string
+}
+
+export interface DraftRound {
+  id: string
+  createdAt: string
+  originalPath: string
+  sourcePath: string
+  feedback: string
+  intent: string
+  maxColors: number
+  style: 'clean' | 'soft'
+  candidates: DraftCandidate[]
 }
 
 export interface StitchPostProcess {
