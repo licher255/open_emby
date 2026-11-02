@@ -46,6 +46,15 @@ function craftScore(m: SampleMachine): number {
 
 export function scoreSample(manifest: SampleManifest): QualityResult {
   const fb = manifest.feedback
+  if (!fb || !manifest.machine || !['success', 'failed', 'unknown'].includes(fb.machine_run)
+    || !Array.isArray(manifest.machine.size_mm) || manifest.machine.size_mm.length !== 2
+    || !manifest.machine.size_mm.every(value => Number.isFinite(value) && value > 0)
+    || !Number.isFinite(manifest.machine.stitch_count) || manifest.machine.stitch_count < 0
+    || !Number.isFinite(manifest.machine.color_changes) || manifest.machine.color_changes < 0
+    || !Number.isInteger(fb.edit_rounds) || fb.edit_rounds < 0
+    || (fb.rating !== undefined && (!Number.isFinite(fb.rating) || fb.rating < 1 || fb.rating > 5))) {
+    return { score: 0, verdict: 'rejected', parts: { invalid: 1 } }
+  }
   const rating = typeof fb.rating === 'number' ? (fb.rating - 1) / 4 : 0.5
   const parts = {
     machine: machineScore(fb.machine_run),
@@ -54,6 +63,7 @@ export function scoreSample(manifest: SampleManifest): QualityResult {
     first_pass: 1 / (1 + (fb.edit_rounds ?? 0))
   }
   const score = 0.35 * parts.machine + 0.25 * parts.rating + 0.2 * parts.craft + 0.2 * parts.first_pass
-  const verdict = score >= 0.7 ? 'curated' : score >= 0.4 ? 'review' : 'rejected'
+  const verdict = fb.machine_run === 'failed' || score < 0.4 ? 'rejected'
+    : fb.machine_run === 'success' && score >= 0.7 ? 'curated' : 'review'
   return { score: Math.round(score * 1000) / 1000, verdict, parts }
 }

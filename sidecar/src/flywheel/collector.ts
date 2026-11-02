@@ -6,6 +6,7 @@ import { loadCore } from '../native.js'
 import { scoreSample, type SampleManifest } from './quality.js'
 
 function poolDir(dataRoot: string, pool: string): string {
+  if (!['inbox', 'curated', 'review', 'rejected'].includes(pool)) throw new Error('Invalid sample pool')
   const d = join(dataRoot, 'datasets', 'flywheel', pool)
   mkdirSync(d, { recursive: true })
   return d
@@ -82,14 +83,15 @@ export function curate(dataRoot: string, dupThreshold = 12): Record<string, numb
     if (q.verdict === 'rejected') {
       dstPool = 'rejected'
       stats.rejected++
-    } else {
+    } else if (q.verdict === 'curated') {
       dstPool = 'curated'
+      manifest.low_confidence = false
       seenHashes.push(manifest.phash ?? '')
-      if (q.verdict === 'review') {
-        manifest.low_confidence = true
-        stats.low_confidence++
-      }
       stats.curated++
+    } else {
+      dstPool = 'review'
+      manifest.low_confidence = true
+      stats.low_confidence++
     }
     writeFileSync(join(src, 'sample.json'), JSON.stringify(manifest, null, 2), 'utf-8')
     renameSync(src, join(poolDir(dataRoot, dstPool), manifest.sample_id))
@@ -99,7 +101,7 @@ export function curate(dataRoot: string, dupThreshold = 12): Record<string, numb
 
 export function deleteContributor(dataRoot: string, contributorId: string): number {
   let removed = 0
-  for (const pool of ['inbox', 'curated', 'rejected']) {
+  for (const pool of ['inbox', 'curated', 'review', 'rejected']) {
     for (const s of listSamples(dataRoot, pool)) {
       if (s.contributor_id === contributorId) {
         rmSync(join(poolDir(dataRoot, pool), s.sample_id), { recursive: true, force: true })
