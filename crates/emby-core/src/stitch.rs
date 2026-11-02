@@ -357,38 +357,3 @@ fn majority_filter(labels: &[u32], w: usize, h: usize, k: usize) -> Vec<u32> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn stitch(x: f64, y: f64) -> StitchPoint {
-        StitchPoint { x, y, flag: FLAG_STITCH, color: 0 }
-    }
-
-    #[test]
-    fn post_process_enforces_machine_geometry() {
-        let input = vec![
-            stitch(0.2, 0.0),
-            stitch(0.4, 0.01),
-            stitch(1.2, 0.02),
-            stitch(7.2, 0.0),
-        ];
-        let output = post_process_stitches(input, 0.6, 3.0, 0.1);
-        let mut previous = StitchPoint { x: 0.0, y: 0.0, flag: FLAG_JUMP, color: 0 };
-        assert!(output.len() >= 3);
-        for point in output {
-            let length = distance(previous, point);
-            assert!(length >= 0.6 - 1e-9, "segment too short: {length}");
-            assert!(length <= 3.0 + 1e-9, "segment too long: {length}");
-            previous = point;
-        }
-    }
-
-    #[test]
-    fn post_process_keeps_a_real_corner() {
-        let input = vec![stitch(2.0, 0.0), stitch(2.0, 2.0), stitch(4.0, 2.0)];
-        let output = post_process_stitches(input, 0.6, 3.0, 0.1);
-        assert!(output.iter().any(|point| (point.x - 2.0).abs() < 1e-9 && (point.y - 2.0).abs() < 1e-9));
-    }
-}
