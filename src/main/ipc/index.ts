@@ -6,10 +6,10 @@ import { IpcChannels } from '@shared/ipc'
 import type { AppSettings, DigitizePlan, EngineProgressEvent, ExportRequest, ProjectImageKind, StitchResult } from '@shared/types'
 import { getSettings, setSettings } from '../services/settings'
 import { generateDraft } from '../services/draft'
-import { ensureComfy, stopComfy } from '../services/comfy'
 import { engineStatus, generateColorBlocks, generateLineArt, startEngine, stopEngine, submitWorkflow } from '../services/engine'
 import { sidecarStatus, sidecarCall, startSidecar, stopSidecar } from '../services/sidecar'
-import { listModels } from '../services/modelManager'
+import { aiGatewayStatus, cancelModelInstall, deleteProvider, importLocalModel, importModelUrl, listModelState, modelInstallStatus, removeModel, saveProvider, startModelInstall, testProvider } from '../services/models'
+import { runtimeDevices, runtimeServers, startServer, stopServer } from '../services/runtime'
 import { listPlugins, invokePlugin } from '../services/pluginHost'
 import { archiveProjectImage, createProject, importImage, listProjectImages, listProjects, loadProjectState, projectHistory, renameProjectImage, restoreProject, saveImageDataUrl, saveProjectState } from '../services/projects'
 import { canvasAdjust } from '../services/projects'
@@ -28,24 +28,22 @@ export function registerIpc(): void {
   }))
 
   ipcMain.handle(IpcChannels.engineStatus, () => engineStatus())
-  ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft'; seed?: number }) => {
+  ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft'; seed?: number; requestId?: string; retry?: boolean }) => {
     const s = getSettings()
-    if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', message: '正在准备图片生成服务…' })
-    await ensureComfy(s.comfyUrl, s.dataRoot, s.comfyPythonPath, s.comfyMainPath)
-    const path = await generateDraft(args.imagePath, { url: s.comfyUrl, dataRoot: s.dataRoot, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: args.seed ?? randomInt(0, 0x100000000) })
-    return `data:image/png;base64,${readFileSync(path).toString('base64')}`
+    if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', message: '正在生成绣稿…' })
+    const result = await generateDraft(args.imagePath, { engineUrl: s.engineUrl, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: args.seed ?? randomInt(0, 0x100000000), requestId: args.requestId, retry: args.retry })
+    return `data:image/png;base64,${readFileSync(result.rawPath).toString('base64')}`
   })
   ipcMain.handle(IpcChannels.engineRepairRegion, async (_e, args: { plan: DigitizePlan; label: number; intent: string }) => {
     const r = args.plan.regions.find(r => r.label === args.label)
     if (!r || !args.intent?.trim() || args.intent.length > 1000) throw new Error('请选择区域并填写 1–1000 字修改要求')
     const settings = getSettings()
-    await ensureComfy(settings.comfyUrl, settings.dataRoot, settings.comfyPythonPath, settings.comfyMainPath)
     const edited = await generateDraft(args.plan.imagePath, {
-      url: settings.comfyUrl, dataRoot: settings.dataRoot, maxColors: args.plan.maxColors,
+      engineUrl: settings.engineUrl, maxColors: args.plan.maxColors,
       intent: `保持现有构图和位置。只修改位于画面横向 ${Math.round(r.xMm / args.plan.widthMm * 100)}%、纵向 ${Math.round(r.yMm / args.plan.heightMm * 100)}% 起的 ${r.color} 色区域。${args.intent}`
     })
-    const destination = edited.replace(/draft\.png$/, 'region-edit.png')
-    await sidecarCall('/digitize/repair-region', { ...args, edited, destination })
+    const destination = edited.path.replace(/stylize\.png$/, 'region-edit.png')
+    await sidecarCall('/digitize/repair-region', { ...args, edited: edited.path, destination })
     return `data:image/png;base64,${readFileSync(destination).toString('base64')}`
   })
   ipcMain.handle(IpcChannels.engineSubmitWorkflow, (_e, wf: Record<string, unknown>) => submitWorkflow(wf))
@@ -131,7 +129,30 @@ export function registerIpc(): void {
     return sidecarCall<{ ok: boolean; files: string[] }>('/export', { ...req, name: basename(result.filePath, extname(result.filePath)), outDir: dirname(result.filePath) })
   })
 
-  ipcMain.handle(IpcChannels.modelList, () => listModels())
+  ipcMain.handle(IpcChannels.modelList, () => listModelState())
+  ipcMain.handle(IpcChannels.modelInstall, (_e, id: string) => startModelInstall(id))
+  ipcMain.handle(IpcChannels.modelInstallStatus, (_e, job: string) => modelInstallStatus(job))
+  ipcMain.handle(IpcChannels.modelCancelInstall, (_e, job: string) => cancelModelInstall(job))
+  ipcMain.handle(IpcChannels.modelRemove, (_e, id: string) => removeModel(id))
+  ipcMain.handle(IpcChannels.modelImport, (_e, body: { url: string; id?: string; name?: string; family?: string }) => importModelUrl(body))
+  ipcMain.handle(IpcChannels.modelImportLocal, (_e, body: { files: string[]; id?: string; name?: string; family?: string }) => importLocalModel(body))
+  ipcMain.handle(IpcChannels.modelPickFiles, async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Select model files',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Model files', extensions: ['safetensors', 'gguf', 'ckpt', 'pt', 'bin'] }]
+    })
+    return result.canceled ? [] : result.filePaths
+  })
+  ipcMain.handle(IpcChannels.aiStatus, () => aiGatewayStatus())
+  ipcMain.handle(IpcChannels.aiProviderSave, (_e, provider: import('@shared/types').AiProvider) => saveProvider(provider))
+  ipcMain.handle(IpcChannels.aiProviderDelete, (_e, id: string) => deleteProvider(id))
+  ipcMain.handle(IpcChannels.aiProviderTest, (_e, id: string) => testProvider(id))
+  ipcMain.handle(IpcChannels.runtimeDevices, () => runtimeDevices())
+  ipcMain.handle(IpcChannels.runtimeServers, () => runtimeServers())
+  ipcMain.handle(IpcChannels.runtimeStart, (_e, modelId: string) => startServer(modelId))
+  ipcMain.handle(IpcChannels.runtimeStop, (_e, modelId: string) => stopServer(modelId))
 
   // ---------- 项目库 ----------
   ipcMain.handle(IpcChannels.projectList, () => listProjects())
@@ -215,7 +236,6 @@ export function bootServices(onLog: (line: string) => void): void {
 }
 
 export function shutdownServices(): void {
-  stopComfy()
   stopSidecar()
   stopEngine()
 }

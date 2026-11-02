@@ -115,7 +115,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   useEffect(() => {
     refreshImages()
     refreshHistory()
-    restoreState()
+    void restoreState().catch(error => toast.error(String(error)))
   }, [refreshImages, refreshHistory, restoreState])
 
   /** 保存工作台状态并留一个版本（Git 提交） */
@@ -493,7 +493,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       const p = await window.openEmby.sidecar.digitizePlan(saved, agentOptions.intent, plan.widthMm, plan.maxColors, agentOptions.fabric, agentOptions.texture)
       setPlan(p)
       await persist('Agent · repaired object plan', { stylizedPath: saved, lineArtPath: null, plan: p, stitches: null })
-      toast.success(zh ? '选区已更新，请检查区域方案再生成针迹。' : 'Region updated. Review the plan before stitching.')
+      toast.success(zh ? '选区已更新，请检查方案。' : 'Region updated. Review the plan.')
     } catch (error) { toast.error(String(error)) }
     finally { setBusy(null) }
   }
@@ -531,14 +531,14 @@ export default function Editor({ project, onProjectChanged }: Props) {
     }
     try {
       await checkpoint(round)
-      const result = await runDraftRound(round, async seed => {
-        const data = await window.openEmby.engine.generateDraft(round.sourcePath, round.maxColors, round.intent, round.style, seed)
+      const result = await runDraftRound(round, async (seed, requestId, retry) => {
+        const data = await window.openEmby.engine.generateDraft(round.sourcePath, round.maxColors, round.intent, round.style, seed, { requestId, retry })
         const path = await window.openEmby.projects.saveImage(project.id, data, 'ai_choice', 'stylized', round.sourcePath.split(/[\\/]/).pop())
         setDraftUrls(urls => ({ ...urls, [path]: data }))
         return path
       }, checkpoint)
       const failed = result.candidates.filter(c => c.status !== 'ready').length
-      if (failed) setStudioError(zh ? `${failed} 张未完成，已保留成功结果。可以补齐这一组。` : `${failed} options did not finish. Keep the results and retry the missing ones.`)
+      if (failed) setStudioError(zh ? `${failed} 张未完成，可补齐。` : `${failed} options did not finish. Retry to fill them in.`)
       await refreshImages(); onProjectChanged()
     } catch (error) { setStudioError(String(error)) }
     finally { batchRunning.current = false; setBusy(null); setAgentStatus('') }
@@ -561,7 +561,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   async function runAgent() {
     if (!imagePath || busy) return
     if (!Number.isFinite(agentOptions.widthMm) || agentOptions.widthMm < 10 || agentOptions.widthMm > 400 || !Number.isInteger(agentOptions.maxColors) || agentOptions.maxColors < 2 || agentOptions.maxColors > 16) {
-      toast.error(zh ? '宽度须为 10–400 mm，色数须为 2–16 的整数。' : 'Width: 10–400 mm. Colors: integer between 2 and 16.'); return
+      toast.error(zh ? '宽度 10–400 mm，色数 2–16。' : 'Width 10–400 mm, colors 2–16.'); return
     }
     setBusy('agent'); setExportFiles(null); setStudioError('')
     let stage = zh ? 'AI 初稿' : 'AI draft'
@@ -580,12 +580,12 @@ export default function Editor({ project, onProjectChanged }: Props) {
       setPlan(p)
       await persist('Agent · object plan checkpoint', { stylizedPath: src, lineArtPath: null, plan: p, stitches: null })
       stage = zh ? '针迹与检查' : 'Stitches and checks'
-      setAgentStatus(zh ? '正在铺设针迹，精细生成可能需要几分钟…' : 'Laying out stitches. Refinement may take a few minutes…')
+      setAgentStatus(zh ? '正在铺设针迹…' : 'Laying out stitches…')
       const post = getStitchPostProcess()
       const result = await window.openEmby.sidecar.digitizeStitches(src, p.maxColors, p.widthMm, post, p, agentOptions.stitchBackend ?? 'paper')
       setStitches(result)
       await persist('Agent · stitch preview and checks', { stylizedPath: src, lineArtPath: null, plan: p, stitches: result })
-      setAgentStatus(zh ? '绣稿已准备好，可以预览或调整细节。' : 'Your embroidery is ready to preview and refine.')
+      setAgentStatus(zh ? '绣稿已就绪。' : 'Embroidery ready.')
       setActiveStep('stitches'); onProjectChanged()
     } catch (error) {
       setStudioError(String(error))
@@ -642,7 +642,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   /** 步骤定义：产物摘要显示在步骤行上（产物留在自己的槽里） */
   const steps: Array<{ id: StepId; done: boolean; artifact: string }> = [
     { id: 'import', done: !!imagePath, artifact: imagePath ? (imagePath.split(/[\\/]/).pop() ?? '') : '' },
-    { id: 'stylize', done: !!stylizedPath, artifact: stylizedPath ? (lineArtPath ? t('editor.twoLayers') : (zh ? 'AI 初稿' : 'Artwork')) : '' },
+    { id: 'stylize', done: !!stylizedPath, artifact: stylizedPath ? (lineArtPath ? t('editor.twoLayers') : (zh ? '图稿' : 'Artwork')) : '' },
     { id: 'plan', done: !!plan, artifact: plan ? `${plan.palette.length} colors` : '' },
     { id: 'stitches', done: !!stitches, artifact: stitches ? `${stitches.stitchCount.toLocaleString()} st` : '' },
     { id: 'export', done: !!exportFiles, artifact: exportFiles ? `${exportFiles.length} files` : '' }
@@ -665,7 +665,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   return (
     <div className="workbench">
       <section className="step-content">
-        <button className="studio-back" disabled={!!busy} onClick={() => { setExpertMode(false); setActiveStep('import') }}>← {zh ? '返回简洁预览' : 'Back to preview'}</button>
+        <button className="studio-back" disabled={!!busy} onClick={() => { setExpertMode(false); setActiveStep('import') }}>← {zh ? '返回预览' : 'Back to preview'}</button>
         <AgentPanel options={agentOptions} onChange={next => { setAgentOptions(next); setPlan(null); setStitches(null); setExportFiles(null) }} busy={!!busy} hasImage={!!imagePath} onRun={runAgent} status={agentStatus} compact={activeStep !== 'import'} />
         {activeStep === 'import' && (
           <ImportStep

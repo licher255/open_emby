@@ -209,10 +209,15 @@ export async function generateColorBlocks(
   const settings = getSettings()
   const maxColors = opts.maxColors ?? 8
   let draft: string | undefined
-  if (!opts.lineArtPath && settings.draftBackend === 'qwen') {
-    imagePath = await generateDraft(imagePath, {
-      url: settings.comfyUrl, dataRoot: settings.dataRoot, maxColors, intent: opts.intent
-    }, onEvent)
+  if (!opts.lineArtPath && settings.draftBackend !== 'builtin') {
+    const result = await generateDraft(imagePath, {
+      engineUrl: settings.engineUrl, maxColors, intent: opts.intent
+    })
+    if (result.backend === 'builtin') {
+      // harness 已用内置算法量化过，结果就是色块图，不必再跑一遍节点。
+      return { colorBlocks: `data:image/png;base64,${readFileSync(result.path).toString('base64')}` }
+    }
+    imagePath = result.path
     draft = `data:image/png;base64,${readFileSync(imagePath).toString('base64')}`
   }
   const colorBlocks = await runImageWorkflow(buildColorBlocksWorkflow(imagePath, opts.lineArtPath, maxColors), 'saveBlocks', onEvent)

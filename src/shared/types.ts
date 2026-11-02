@@ -89,6 +89,7 @@ export interface CommitInfo {
 
 /** 项目工作台持久化状态（state.json，被版本库跟踪） */
 export interface ProjectState {
+  schemaVersion?: 1
   draftRounds?: DraftRound[]
   imagePath?: string | null
   stylizedPath?: string | null
@@ -237,14 +238,152 @@ export interface SampleManifest {
 
 export interface AppSettings {
   contribution: ContributionConsent
-  dataRoot: string // 默认 E:/Project-刺绣机
-  engineUrl: string // emby-engine（Rust 生成引擎）
-  draftBackend: 'qwen' | 'native'
-  comfyUrl: string // Qwen 图生图服务，与 Rust 后处理服务分开
-  comfyPythonPath?: string
-  comfyMainPath?: string
+  dataRoot: string // default data root
+  engineUrl: string // emby-engine (Rust engine + AI gateway)
+  /** model: generate through a gateway provider; builtin: Rust-only digitizing */
+  draftBackend: 'model' | 'builtin'
+  /** Only needed by the paper-stitch sidecar (optional). */
   paperPythonPath?: string
   paperRepoPath?: string
   sidecarUrl: string
-  locale: string // 'en'（原生默认）| 'zh-CN'
+  locale: string // 'en' (native default) | 'zh-CN'
+}
+
+/* ------------------------------------------------------------------ *
+ * AI gateway: providers persist in Rust; Electron only reads, writes and renders
+ * ------------------------------------------------------------------ */
+
+export type AiProviderKind = 'open-ai' | 'local' | 'builtin'
+
+export interface AiProvider {
+  id: string
+  name: string
+  kind: AiProviderKind
+  baseUrl: string
+  /** Masked key (e.g. ••••abcd). Empty or containing • means "keep the stored value". */
+  apiKey: string
+  imageModel: string
+  chatModel: string
+  enabled: boolean
+  note: string
+}
+
+export interface AiRuntimeStatus {
+  sdBin: string | null
+  llamaBin: string | null
+  modelsRoot: string
+  installed: number
+  ready: number
+}
+
+export interface AiStatus {
+  providers: AiProvider[]
+  runtime: AiRuntimeStatus
+}
+
+export interface ModelFileManifest {
+  name: string
+  url: string
+  sha256?: string
+  bytes?: number
+}
+
+export interface ModelDefaults {
+  steps: number
+  cfgScale: number
+  width: number
+  height: number
+  negative: string
+}
+
+export interface ModelManifest {
+  id: string
+  name: string
+  family: string
+  runtime: 'sd-cpp' | 'llama-cpp'
+  description: string
+  license: string
+  approxBytes: number
+  tags: string[]
+  files: ModelFileManifest[]
+  defaults: ModelDefaults
+}
+
+export interface ModelFileState {
+  name: string
+  bytes: number
+  present: boolean
+}
+
+export interface InstalledModelInfo {
+  manifest: ModelManifest
+  dir: string
+  bytes: number
+  ready: boolean
+  files: ModelFileState[]
+}
+
+export interface ModelCatalogItem {
+  manifest: ModelManifest
+  installed: boolean
+}
+
+export interface ModelInstallStatus {
+  job: string
+  modelId: string
+  phase: 'queued' | 'downloading' | 'verifying' | 'done' | 'error' | 'cancelled'
+  file: string
+  fileIndex: number
+  fileCount: number
+  received: number
+  total: number
+  message: string
+  done: boolean
+  error: string
+}
+
+/* Runtime hardware and managed servers */
+
+export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'huawei' | 'moorethreads' | 'unknown'
+
+export interface GpuDevice {
+  vendor: GpuVendor
+  name: string
+  memoryMb: number | null
+  backend: string
+  source: string
+}
+
+export interface RuntimeDevices {
+  os: string
+  devices: GpuDevice[]
+  recommendedBackend: string
+  binaries: { sdCli: string | null; sdServer: string | null; llamaServer: string | null }
+}
+
+export type ServerPhase = 'starting' | 'ready' | 'stopped' | 'failed'
+
+export interface RuntimeServer {
+  modelId: string
+  phase: ServerPhase
+  pid: number | null
+  port: number
+  healthUrl: string
+  startedAt: number
+  lastUsed: number
+  restarts: number
+  error: string | null
+  logPath: string
+}
+
+export interface StylizeHarnessResult {
+  path: string
+  rawPath: string
+  palette: string[]
+  provider: string
+  model: string
+  prompt: string
+  seed: number
+  recipePath: string
+  backend: 'builtin' | 'model'
 }

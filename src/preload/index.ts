@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels } from '@shared/ipc'
-import type { AppSettings, ColorBlocksResult, EngineProgressEvent, ExportRequest } from '@shared/types'
+import type { AiProvider, AppSettings, ColorBlocksResult, EngineProgressEvent, ExportRequest, ModelInstallStatus, StylizeHarnessResult } from '@shared/types'
 
 // 无边框窗口控制
 const windowControls = {
@@ -19,8 +19,8 @@ const windowControls = {
 const api = {
   envStatus: () => ipcRenderer.invoke(IpcChannels.envStatus),
   engine: {
-    generateDraft: (imagePath: string, maxColors: number, intent: string, style?: 'clean' | 'soft', seed?: number): Promise<string> =>
-      ipcRenderer.invoke(IpcChannels.engineGenerateDraft, { imagePath, maxColors, intent, style, seed }),
+    generateDraft: (imagePath: string, maxColors: number, intent: string, style?: 'clean' | 'soft', seed?: number, task?: { requestId: string; retry: boolean }): Promise<string> =>
+      ipcRenderer.invoke(IpcChannels.engineGenerateDraft, { imagePath, maxColors, intent, style, seed, ...task }),
     repairRegion: (plan: import('@shared/types').DigitizePlan, label: number, intent: string): Promise<string> =>
       ipcRenderer.invoke(IpcChannels.engineRepairRegion, { plan, label, intent }),
     status: () => ipcRenderer.invoke(IpcChannels.engineStatus),
@@ -86,7 +86,28 @@ const api = {
     ,exportSave: (req: Omit<ExportRequest, 'outDir'>): Promise<{ ok: boolean; files: string[] } | null> => ipcRenderer.invoke(IpcChannels.sidecarExportSave, req)
   },
   models: {
-    list: () => ipcRenderer.invoke(IpcChannels.modelList)
+    list: () => ipcRenderer.invoke(IpcChannels.modelList),
+    install: (id: string): Promise<{ job: string }> => ipcRenderer.invoke(IpcChannels.modelInstall, id),
+    status: (job: string): Promise<ModelInstallStatus> => ipcRenderer.invoke(IpcChannels.modelInstallStatus, job),
+    cancel: (job: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IpcChannels.modelCancelInstall, job),
+    remove: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IpcChannels.modelRemove, id),
+    importUrl: (body: { url: string; id?: string; name?: string; family?: string }) =>
+      ipcRenderer.invoke(IpcChannels.modelImport, body),
+    importLocal: (body: { files: string[]; id?: string; name?: string; family?: string }) =>
+      ipcRenderer.invoke(IpcChannels.modelImportLocal, body),
+    pickFiles: (): Promise<string[]> => ipcRenderer.invoke(IpcChannels.modelPickFiles)
+  },
+  runtime: {
+    devices: () => ipcRenderer.invoke(IpcChannels.runtimeDevices),
+    servers: (): Promise<import('@shared/types').RuntimeServer[]> => ipcRenderer.invoke(IpcChannels.runtimeServers),
+    start: (modelId: string) => ipcRenderer.invoke(IpcChannels.runtimeStart, modelId),
+    stop: (modelId: string) => ipcRenderer.invoke(IpcChannels.runtimeStop, modelId)
+  },
+  ai: {
+    status: () => ipcRenderer.invoke(IpcChannels.aiStatus),
+    saveProvider: (provider: AiProvider) => ipcRenderer.invoke(IpcChannels.aiProviderSave, provider),
+    deleteProvider: (id: string) => ipcRenderer.invoke(IpcChannels.aiProviderDelete, id),
+    testProvider: (id: string): Promise<{ ok: boolean; detail: string }> => ipcRenderer.invoke(IpcChannels.aiProviderTest, id)
   },
   plugins: {
     list: () => ipcRenderer.invoke(IpcChannels.pluginList),
