@@ -12,6 +12,9 @@ crates/**/*.node
 crates/**/index.js
 crates/**/index.d.ts
 .DS_Store
+benchmarks/out/
+__pycache__/
+*.py[cod]
 /doc/
 /benchmarks/
 /crates/emby-bench/

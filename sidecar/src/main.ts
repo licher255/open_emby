@@ -19,7 +19,7 @@ async function main() {
 const app = Fastify({ logger: false, bodyLimit: 64 * 1024 * 1024 })
 await app.register(multipart)
 
-app.get('/health', async () => ({ ok: true, service: 'open_emby-sidecar', version: '0.2.0', apiRevision: 'studio-paper-v1', runtime: 'node+rust+paper-worker' }))
+app.get('/health', async () => ({ ok: true, service: 'open_emby-sidecar', version: '0.2.0', apiRevision: 'studio-paper-v1', runtime: 'node+rust+paper-worker', instanceId: process.env.OPEN_EMBY_INSTANCE_ID }))
 
 interface PlanBody { imagePath: string; intent?: string; maxColors?: number; widthMm?: number; fabric?: AgentOptions['fabric']; texture?: AgentOptions['texture'] }
 app.post('/digitize/plan', async (req) => {
