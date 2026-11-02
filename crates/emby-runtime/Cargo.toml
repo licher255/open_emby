@@ -1,0 +1,13 @@
+[package]
+name = "emby-runtime"
+version = "0.1.0"
+edition = "2021"
+description = "open_emby model runtime launcher: lifecycle, health, idle eviction"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
