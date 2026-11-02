@@ -91,7 +91,7 @@ export default function StylizeStep(props: Props) {
               ) : (
                 <div className="ws-empty">
                   {imageUrl ? <img src={imageUrl} alt="input" /> : <Icon name="image" size={44} />}
-                  <p>{imageUrl ? t('editor.readyToStylize') : t('editor.noInput')}</p>
+                  {!imageUrl && <p>{t('editor.noInput')}</p>}
                   <button className="btn-pill" disabled={!imagePath} onClick={props.onGenerate}>{t('editor.stylize')}</button>
                 </div>
               )}

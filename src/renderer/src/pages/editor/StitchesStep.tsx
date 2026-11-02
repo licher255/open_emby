@@ -90,7 +90,6 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
           <span>mm</span>
         </label>
       </div>
-      <p className="mono-meta stitch-post-hint">{zh ? '按区域方案生成针迹。短针阈值用于筛除过短填针跨度并提示短针；边界转向点会保留。长针按最大针长拆分，错位落针不会被曲线简化删除。' : 'Stitches follow the object plan. The short-stitch threshold filters tiny fill spans and flags short stitches; boundary turns are retained. Long stitches are split without erasing staggered penetration points.'}</p>
       <div className="editor-actions">
         <button className="btn-pill" disabled={!!busy || !hasSource} onClick={onMakeStitches}>
           {busy === 'stitch' ? t('editor.stitching') : t('editor.stitch')}
@@ -105,7 +104,7 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
             <div className="stitch-layout">
               <div>
                 <div className="view-tabs">
-                  <label><input type="checkbox" checked={showUnderlay} onChange={e => setShowUnderlay(e.target.checked)} />{zh ? '显示底针（导出始终保留）' : 'Show underlay (always exported)'}</label>
+                  <label><input type="checkbox" checked={showUnderlay} onChange={e => setShowUnderlay(e.target.checked)} />{zh ? '显示底针（始终导出）' : 'Show underlay (always exported)'}</label>
                   <label><input type="checkbox" checked={highlightTravel} onChange={e => setHighlightTravel(e.target.checked)} />{zh ? '突出内部走线（粉色）' : 'Highlight travel (pink)'}</label>
                   <button className={view3d ? '' : 'active'} onClick={() => setView3d(false)}>{t('stitch.view2d')}</button>
                   <button className={view3d ? 'active' : ''} onClick={() => setView3d(true)}>{t('stitch.view3d')}</button>
@@ -127,7 +126,7 @@ export default function StitchesStep({ stitches, busy, hasSource, stitchPost, on
               </div>
               <div className="stitch-side">
                 <h3>{t('stitch.checks')}</h3>
-                {stitches.method?.backend === 'paper' && <p className="mono-meta">{zh ? '精细流线覆盖面积' : 'Paper-covered area'}: {Math.round((stitches.method.paperAreaRatio ?? 0) * 100)}% · {stitches.method.paperRegions} {zh ? '个区域；其余细节采用基础针法' : 'regions; remaining details use native stitches'}</p>}
+                {stitches.method?.backend === 'paper' && <p className="mono-meta">{zh ? '精细流线覆盖面积' : 'Paper-covered area'}: {Math.round((stitches.method.paperAreaRatio ?? 0) * 100)}% · {stitches.method.paperRegions} {zh ? '个区域，其余用基础针法' : 'regions; rest use native'}</p>}
                 {stitches.quality && <div className="quality-report">
                   <p>{zh ? '最大针长' : 'Longest stitch'}: {stitches.quality.maxLengthMm.toFixed(2)} mm · {zh ? '跳针' : 'Jumps'}: {stitches.quality.jumpCount}</p>
                   <p>{zh ? '跳针总长 / 内部走线' : 'Jump / internal travel length'}: {(stitches.quality.jumpLengthMm ?? 0).toFixed(0)} / {(stitches.quality.travelLengthMm ?? 0).toFixed(0)} mm</p>

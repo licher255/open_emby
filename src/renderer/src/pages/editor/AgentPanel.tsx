@@ -9,7 +9,7 @@ export default function AgentPanel({ options, onChange, busy, hasImage, onRun, s
   const [expanded, setExpanded] = useState(!compact)
   useEffect(() => { setExpanded(!compact || busy) }, [compact, busy])
   return <details className="agent-panel" open={expanded} onToggle={e => setExpanded(e.currentTarget.open)} aria-label={zh ? 'AI 制版助手' : 'AI digitizing assistant'}>
-    <summary className="agent-heading"><strong>{zh ? 'AI 制版助手' : 'AI digitizing assistant'}</strong><span>{zh ? '初稿 → 区域方案 → 针迹 → 检查' : 'Draft → Objects → Stitches → Checks'}</span></summary>
+    <summary className="agent-heading"><strong>{zh ? 'AI 制版助手' : 'AI digitizing assistant'}</strong></summary>
     <fieldset disabled={busy}>
       <label className="agent-intent">{zh ? '设计要求' : 'Design brief'}<textarea maxLength={1500} rows={2} value={options.intent} placeholder={zh ? '例如：保留猫眼颜色，简化毛发，白色背景' : 'Keep the eye color; simplify fur; white background'} onChange={e => onChange({ ...options, intent: e.target.value })} /></label>
       <div className="agent-controls">
@@ -21,7 +21,7 @@ export default function AgentPanel({ options, onChange, busy, hasImage, onRun, s
         <button className="btn-pill" disabled={!hasImage} onClick={onRun}>{zh ? '生成初稿与针迹预览' : 'Generate draft & stitch preview'}</button>
       </div>
     </fieldset>
-    <p className="mono-meta" role="status">{status || (zh ? '适用于约 10 cm 人物／宠物图案。生成后可点击区域调整；导出前检查并试绣。' : 'For portraits and pets around 10 cm. Edit regions after generation; inspect and test sew before production.')}</p>
+    <p className="mono-meta" role="status">{status}</p>
   </details>
 }
 

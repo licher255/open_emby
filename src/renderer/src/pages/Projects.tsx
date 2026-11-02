@@ -15,13 +15,12 @@ export default function Projects({ projects, onOpen, onCreate }: Props) {
   return (
     <div className="projects-page">
       <header className="editor-head">
-        <div><p className="studio-eyebrow">OPEN EMBY</p><h1>{zh ? '我的绣作' : 'My embroideries'}</h1><p className="studio-home-hint">{zh ? '从一张照片开始，留下喜欢的模样。' : 'Start with a photo. Make something personal.'}</p></div>
+        <h1>{zh ? '我的绣作' : 'My embroideries'}</h1>
       </header>
       <div className="project-grid">
         <button className="project-card new" onClick={onCreate}>
           <div className="project-card-plus">＋</div>
           <div className="project-card-name">{t('projects.newCard')}</div>
-          <div className="project-card-meta">{t('projects.newHint')}</div>
         </button>
         {projects.map((p) => (
           <button key={p.id} className="project-card" onClick={() => onOpen(p)}>
@@ -33,11 +32,6 @@ export default function Projects({ projects, onOpen, onCreate }: Props) {
           </button>
         ))}
       </div>
-      {projects.length === 0 && (
-        <p className="mono-meta" style={{ marginTop: 24 }}>
-          {t('projects.storageNote')}
-        </p>
-      )}
     </div>
   )
 }

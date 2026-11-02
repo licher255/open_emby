@@ -91,7 +91,7 @@ export default function App() {
 
   async function createProject() {
     if (useWorkbench.getState().taskBusy) return
-    const p = await window.openEmby.projects.create(newName.trim() || '未命名制版')
+    const p = await window.openEmby.projects.create(newName.trim() || t('app.newProject'))
     setCreating(false)
     setNewName('')
     await refreshProjects()
