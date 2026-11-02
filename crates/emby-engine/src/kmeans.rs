@@ -53,8 +53,9 @@ pub fn kmeans(
     mut on_iter: impl FnMut(usize),
     interrupted: &dyn Fn() -> bool,
 ) -> (Vec<u32>, Vec<Lab>) {
-    use rand::Rng;
-    let mut rng = rand::rng();
+    use rand::{Rng, SeedableRng};
+    // Quantization is a deterministic compilation step, including model post-processing.
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
     let n = points.len();
     let mut centers: Vec<Lab> = vec![points[rng.random_range(0..n)]];
     while centers.len() < k {

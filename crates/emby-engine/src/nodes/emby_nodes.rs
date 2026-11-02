@@ -518,3 +518,31 @@ fn line_art_extract(ctx: &NodeCtx, args: Vec<Value>) -> anyhow::Result<NodeRun> 
     }
     Ok(NodeRun::values(vec![Value::Image(Arc::new(out))]))
 }
+
+/// Shared by harnesses and the built-in provider: same algorithm as the
+/// EmbyColorBlockStylize node, but without the graph or AppState.
+/// Returns (colour-block image, palette hex).
+pub fn stylize_blocks(img: &RgbImage, max_colors: usize, smooth: u32) -> anyhow::Result<(RgbImage, Vec<String>)> {
+    use std::sync::atomic::{AtomicBool, AtomicU64};
+    let progress: Arc<dyn Fn(u64, u64) + Send + Sync> = Arc::new(|_, _| {});
+    let ctx = NodeCtx {
+        input_dir: std::path::PathBuf::new(),
+        output_dir: std::path::PathBuf::new(),
+        temp_dir: std::path::PathBuf::new(),
+        save_counter: Arc::new(AtomicU64::new(0)),
+        interrupt: Arc::new(AtomicBool::new(false)),
+        progress,
+    };
+    let run = color_block_stylize_impl(
+        &ctx,
+        vec![
+            Value::Image(Arc::new(img.clone())),
+            Value::Int(max_colors.clamp(2, 24) as i64),
+            Value::Int(smooth.min(4) as i64),
+        ],
+        None,
+    )?;
+    let out = (*run.outputs[0].as_image()?).clone();
+    let palette: Vec<String> = serde_json::from_str(run.outputs[1].as_str()?)?;
+    Ok((out, palette))
+}

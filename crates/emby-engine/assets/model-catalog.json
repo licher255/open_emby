@@ -1,0 +1,159 @@
+[
+  {
+    "id": "sd15-base",
+    "name": "Stable Diffusion 1.5",
+    "family": "sd15",
+    "runtime": "sd-cpp",
+    "description": "General-purpose text-to-image and image-to-image base model. Single file, low VRAM; good first pipeline test.",
+    "license": "CreativeML Open RAIL-M",
+    "approxBytes": 4270000000,
+    "tags": [
+      "general",
+      "low VRAM",
+      "safetensors"
+    ],
+    "files": [
+      {
+        "name": "v1-5-pruned-emaonly.safetensors",
+        "url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors",
+        "bytes": 4270000000
+      }
+    ],
+    "defaults": {
+      "steps": 24,
+      "cfgScale": 7,
+      "width": 640,
+      "height": 640,
+      "negative": "photo, realistic skin, text, watermark, frame"
+    }
+  },
+  {
+    "id": "sdxl-base",
+    "name": "Stable Diffusion XL 1.0",
+    "family": "sdxl",
+    "runtime": "sd-cpp",
+    "description": "1024-class base model with steadier structure for complex subjects.",
+    "license": "CreativeML Open RAIL++-M",
+    "approxBytes": 6938000000,
+    "tags": [
+      "high detail",
+      "1024",
+      "safetensors"
+    ],
+    "files": [
+      {
+        "name": "sd_xl_base_1.0.safetensors",
+        "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+        "bytes": 6938000000
+      }
+    ],
+    "defaults": {
+      "steps": 28,
+      "cfgScale": 6.5,
+      "width": 768,
+      "height": 768,
+      "negative": "photo, text, watermark, frame"
+    }
+  },
+  {
+    "id": "flux1-schnell-q4",
+    "name": "FLUX.1 schnell (GGUF Q4)",
+    "family": "flux",
+    "runtime": "sd-cpp",
+    "description": "Distilled 4-step model in GGUF; needs a VAE and two text encoders.",
+    "license": "Apache-2.0",
+    "approxBytes": 17400000000,
+    "tags": [
+      "fast",
+      "GGUF",
+      "multi-file"
+    ],
+    "files": [
+      {
+        "name": "flux1-schnell-Q4_K_S.gguf",
+        "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_K_S.gguf"
+      },
+      {
+        "name": "ae.safetensors",
+        "url": "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors"
+      },
+      {
+        "name": "clip_l.safetensors",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors"
+      },
+      {
+        "name": "t5xxl_fp16.safetensors",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors"
+      }
+    ],
+    "defaults": {
+      "steps": 4,
+      "cfgScale": 1,
+      "width": 768,
+      "height": 768,
+      "negative": "text, watermark"
+    }
+  },
+  {
+    "id": "qwen-image-q4",
+    "name": "Qwen-Image (GGUF Q4)",
+    "family": "qwen-image",
+    "runtime": "sd-cpp",
+    "description": "Image model with stronger Chinese prompt understanding. Catalog entries can be overridden in catalog.local.json.",
+    "license": "Apache-2.0",
+    "approxBytes": 16000000000,
+    "tags": [
+      "Chinese",
+      "GGUF",
+      "multi-file"
+    ],
+    "files": [
+      {
+        "name": "Qwen-Image-Q4_K_S.gguf",
+        "url": "https://huggingface.co/QuantStack/Qwen-Image-GGUF/resolve/main/Qwen-Image-Q4_K_S.gguf"
+      },
+      {
+        "name": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+        "url": "https://huggingface.co/QuantStack/Qwen-Image-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"
+      },
+      {
+        "name": "qwen_image_vae.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+      }
+    ],
+    "defaults": {
+      "steps": 20,
+      "cfgScale": 4,
+      "width": 768,
+      "height": 768,
+      "negative": "text, watermark, photo grain"
+    }
+  },
+  {
+    "id": "routing-expert-qwen3b",
+    "name": "走线专家 Qwen2.5-3B (GGUF)",
+    "family": "llm",
+    "runtime": "llama-cpp",
+    "description": "Local routing/ordering expert. Without it the harness falls back to the deterministic nearest-neighbour strategy.",
+    "license": "Apache-2.0",
+    "approxBytes": 1900000000,
+    "tags": [
+      "LLM",
+      "GGUF",
+      "routing"
+    ],
+    "files": [
+      {
+        "name": "qwen2.5-3b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+      }
+    ],
+    "defaults": {
+      "steps": 0,
+      "cfgScale": 0,
+      "width": 0,
+      "height": 0,
+      "negative": ""
+    }
+  }
+]

@@ -30,6 +30,7 @@ pub fn router(st: Arc<AppState>) -> Router {
         .route("/view", get(view))
         .route("/upload/image", post(upload_image))
         .route("/ws", get(ws_handler))
+        .merge(crate::api::router())
         .layer(DefaultBodyLimit::max(128 * 1024 * 1024))
         .with_state(st)
 }
@@ -44,7 +45,8 @@ async fn root() -> Json<JsonV> {
 }
 
 async fn health() -> Json<JsonV> {
-    Json(json!({ "ok": true, "service": "emby-engine", "version": env!("CARGO_PKG_VERSION") }))
+    Json(json!({ "ok": true, "service": "emby-engine", "version": env!("CARGO_PKG_VERSION"),
+        "instanceId": std::env::var("OPEN_EMBY_INSTANCE_ID").ok() }))
 }
 
 async fn system_stats() -> Json<JsonV> {

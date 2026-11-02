@@ -41,10 +41,29 @@ impl HistoryStore {
     }
 }
 
+/// Live state of one model installation (polled from /api/models/install/{job}).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallStatus {
+    pub job: String,
+    pub model_id: String,
+    pub phase: String,
+    pub file: String,
+    pub file_index: usize,
+    pub file_count: usize,
+    pub received: u64,
+    pub total: u64,
+    pub message: String,
+    pub done: bool,
+    pub error: String,
+}
+
 pub struct AppState {
     pub input_dir: PathBuf,
     pub output_dir: PathBuf,
     pub temp_dir: PathBuf,
+    /// Data root: models, harness artifacts and AI provider config live under it.
+    pub data_root: PathBuf,
     /// WS 事件总线（status / executing / progress / executed / execution_*）
     pub events: broadcast::Sender<String>,
     pub queue: PromptQueue,
@@ -52,26 +71,50 @@ pub struct AppState {
     /// 跨 prompt 的节点输出缓存（ComfyUI classic cache）
     pub cache: Mutex<HashMap<String, Vec<Value>>>,
     pub save_counter: Arc<AtomicU64>,
+    /// AI providers (cloud API / local runtime / built-in).
+    pub providers: Mutex<Vec<crate::ai::Provider>>,
+    /// Running and recently finished model installation jobs.
+    pub installs: Mutex<HashMap<String, InstallStatus>>,
+    /// Model server launcher: lifecycle, health and idle eviction.
+    pub runtime: std::sync::Arc<emby_runtime::ServerManager>,
+    pub harness_slots: tokio::sync::Semaphore,
+    pub harness_cancels: Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
+    pub harness_failures: Mutex<HashMap<String, crate::harness::jobs::Job>>,
 }
 
 impl AppState {
-    pub fn new(base: PathBuf) -> std::io::Result<std::sync::Arc<Self>> {
+    pub fn new(data_root: PathBuf) -> std::io::Result<std::sync::Arc<Self>> {
+        let base = data_root.join("engine");
         let input_dir = base.join("input");
         let output_dir = base.join("output");
         let temp_dir = base.join("temp");
         for d in [&input_dir, &output_dir, &temp_dir] {
             std::fs::create_dir_all(d)?;
         }
+        crate::models::ensure_dirs(&data_root)?;
+        crate::harness::jobs::recover(&data_root).map_err(std::io::Error::other)?;
+        let providers = crate::ai::load_providers(&data_root);
         let (events, _) = broadcast::channel(256);
         Ok(std::sync::Arc::new(Self {
             input_dir,
             output_dir,
             temp_dir,
+            data_root,
             events,
             queue: PromptQueue::new(),
             history: Mutex::new(HistoryStore::new()),
             cache: Mutex::new(HashMap::new()),
             save_counter: Arc::new(AtomicU64::new(1)),
+            providers: Mutex::new(providers),
+            installs: Mutex::new(HashMap::new()),
+            harness_slots: tokio::sync::Semaphore::new(1),
+            harness_cancels: Mutex::new(HashMap::new()),
+            harness_failures: Mutex::new(HashMap::new()),
+            runtime: emby_runtime::ServerManager::new(
+                emby_runtime::LocalHost::new(),
+                emby_runtime::ManagerConfig::default(),
+                base.join("runtime"),
+            ),
         }))
     }
 

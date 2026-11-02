@@ -8,6 +8,9 @@ mod emby_nodes;
 mod image_nodes;
 mod model_nodes;
 
+/// 供 harness / 内置 provider 复用的制版核心（不经过节点图）。
+pub use emby_nodes::stylize_blocks;
+
 pub fn build_registry() -> BTreeMap<&'static str, NodeDef> {
     let mut m = BTreeMap::new();
     let groups = [image_nodes::defs(), emby_nodes::defs(), model_nodes::defs()];
