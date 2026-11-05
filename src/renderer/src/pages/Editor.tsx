@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentOptions, CommitInfo, DigitizePlan, DraftRound, EngineProgressEvent, ProjectImage, ProjectInfo, ProjectState, StitchPostProcess, StitchResult } from '@shared/types'
+import type { AgentOptions, CommitInfo, DigitizePlan, DraftProgress, DraftRound, EngineProgressEvent, ProjectImage, ProjectInfo, ProjectState, StitchPostProcess, StitchResult } from '@shared/types'
 import { createDraftRound, runDraftRound } from './editor/draftRounds'
 import { toast } from '../stores/toast'
 import { confirmDialog, promptDialog } from '../stores/dialog'
@@ -34,6 +34,8 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const [draftUrls, setDraftUrls] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState(false)
   const batchRunning = useRef(false)
+  const activeDraftId = useRef<string | null>(null)
+  const [draftProgress, setDraftProgress] = useState<DraftProgress | null>(null)
   const [repairPreview, setRepairPreview] = useState<{ data: string; source: string } | null>(null)
   const activeStep = useWorkbench((s) => s.activeStep)
   const historyOpen = useWorkbench((s) => s.historyOpen)
@@ -185,6 +187,10 @@ export default function Editor({ project, onProjectChanged }: Props) {
 
   useEffect(() => {
     const off = window.openEmby.engine.onProgress((ev: EngineProgressEvent) => {
+      if (ev.taskId) {
+        if (ev.taskId === activeDraftId.current && ev.stage) setDraftProgress({ taskId: ev.taskId, stage: ev.stage, value: ev.value, max: ev.max })
+        return
+      }
       if (ev.type === 'executing' && ev.nodeId) {
         setNodeStates((prev) => {
           const next = { ...prev }
@@ -532,7 +538,10 @@ export default function Editor({ project, onProjectChanged }: Props) {
     try {
       await checkpoint(round)
       const result = await runDraftRound(round, async (seed, requestId, retry) => {
+        activeDraftId.current = requestId
+        setDraftProgress({ taskId: requestId, stage: 'queued' })
         const data = await window.openEmby.engine.generateDraft(round.sourcePath, round.maxColors, round.intent, round.style, seed, { requestId, retry })
+        setDraftProgress({ taskId: requestId, stage: 'saving' })
         const path = await window.openEmby.projects.saveImage(project.id, data, 'ai_choice', 'stylized', round.sourcePath.split(/[\\/]/).pop())
         setDraftUrls(urls => ({ ...urls, [path]: data }))
         return path
@@ -541,7 +550,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
       if (failed) setStudioError(zh ? `${failed} 张未完成，可补齐。` : `${failed} options did not finish. Retry to fill them in.`)
       await refreshImages(); onProjectChanged()
     } catch (error) { setStudioError(String(error)) }
-    finally { batchRunning.current = false; setBusy(null); setAgentStatus('') }
+    finally { batchRunning.current = false; activeDraftId.current = null; setDraftProgress(null); setBusy(null); setAgentStatus('') }
   }
 
   async function chooseArtwork(path: string) {
@@ -656,7 +665,7 @@ export default function Editor({ project, onProjectChanged }: Props) {
   const stage2Assets = images.filter((i) => i.kind === 'stylized' || i.kind === 'lineart')
 
   if (!expertMode) return <>
-    <Studio imageUrl={imageUrl} artworkUrl={stylizedUrl} selectedPath={stylizedPath} rounds={draftRounds} draftUrls={draftUrls} onChoose={chooseArtwork} onFeedback={text => generateChoices(text, true)} onRetry={id => generateChoices('', false, id)} stitches={stitches} options={agentOptions} busy={busy} status={agentStatus} error={studioError} files={exportFiles}
+    <Studio imageUrl={imageUrl} artworkUrl={stylizedUrl} selectedPath={stylizedPath} rounds={draftRounds} draftUrls={draftUrls} draftProgress={draftProgress} onChoose={chooseArtwork} onFeedback={text => generateChoices(text, true)} onRetry={id => generateChoices('', false, id)} stitches={stitches} options={agentOptions} busy={busy} status={agentStatus} error={studioError} files={exportFiles}
       onOptions={next => { setAgentOptions(next); setPlan(null); setStitches(null); setExportFiles(null) }} onPick={pickImage} onImport={importIntoProject} onGenerate={() => generateChoices()} onResume={makeStitches} onExport={exportDst}
       onRefine={() => { setExpertMode(true); setActiveStep(plan ? 'plan' : stylizedPath ? 'stylize' : 'import') }} onHistory={() => useWorkbench.getState().setHistoryOpen(!historyOpen)} />
     {historyOpen && <HistoryPanel detailed history={history} onRestore={restoreVersion} />}

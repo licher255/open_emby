@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import type { AgentOptions, DraftRound, StitchResult } from '@shared/types'
+import type { AgentOptions, DraftProgress, DraftRound, StitchResult } from '@shared/types'
+import ProcessProgress from './ProcessProgress'
 import { useI18n } from '../../i18n'
 import StitchPreview from '../../components/StitchPreview'
 import PanZoomStage from '../../components/PanZoomStage'
 import Icon from '../../components/Icon'
 
-export default function Studio({ imageUrl, artworkUrl, selectedPath, rounds, draftUrls, stitches, options, busy, status, error, files, onOptions, onPick, onImport, onGenerate, onFeedback, onRetry, onChoose, onResume, onExport, onRefine, onHistory }: {
+export default function Studio({ imageUrl, artworkUrl, selectedPath, rounds, draftUrls, draftProgress, stitches, options, busy, status, error, files, onOptions, onPick, onImport, onGenerate, onFeedback, onRetry, onChoose, onResume, onExport, onRefine, onHistory }: {
   imageUrl: string | null; artworkUrl: string | null; selectedPath: string | null
   rounds: DraftRound[]; draftUrls: Record<string, string>; stitches: StitchResult | null; options: AgentOptions
   busy: string | null; status: string; error: string; files: string[] | null
+  draftProgress: DraftProgress | null
   onOptions: (options: AgentOptions) => void; onPick: () => void; onImport: (path: string) => void
   onGenerate: () => void; onFeedback: (text: string) => void; onRetry: (id: string) => void; onChoose: (path: string) => void
   onResume: () => void; onExport: () => void; onRefine: () => void; onHistory: () => void
@@ -40,13 +42,13 @@ export default function Studio({ imageUrl, artworkUrl, selectedPath, rounds, dra
         {imageUrl ? <>
           <div className="studio-tabs" role="tablist" aria-label={zh ? '预览内容' : 'Preview'}>{tabs.map(tab => <button key={tab.id} data-view={tab.id} role="tab" aria-selected={displayedView === tab.id} className={displayedView === tab.id ? 'active' : ''} disabled={!tab.enabled} onClick={() => setView(tab.id)}>{tab.label}</button>)}</div>
           {displayedView === 'choices' && round ? <div className="studio-choices-panel">
-            <div className="studio-round-bar"><label>{zh ? '候选组' : 'Round'} <select aria-label={zh ? '候选组' : 'Round'} disabled={!!busy} value={roundIndex} onChange={e => setRoundIndex(Number(e.target.value))}>{rounds.map((r, i) => <option key={r.id} value={i}>{zh ? `第 ${i + 1} 组` : `Round ${i + 1}`}{r.feedback ? (zh ? ' · 微调' : ' · Refined') : ''}</option>)}</select></label><span>{round.candidates.filter(c => c.status === 'ready').length} / 4 {zh ? '已完成' : 'ready'}</span></div>
+            <div className="studio-round-bar"><label>{zh ? '候选组' : 'Round'} <select aria-label={zh ? '候选组' : 'Round'} disabled={!!busy} value={roundIndex} onChange={e => setRoundIndex(Number(e.target.value))}>{rounds.map((r, i) => <option key={r.id} value={i}>{zh ? `第 ${i + 1} 组` : `Round ${i + 1}`}{r.feedback ? (zh ? ' · 微调' : ' · Refined') : ''}</option>)}</select></label>{busy !== 'drafts' && <span>{round.candidates.filter(c => c.status === 'ready').length} / 4 {zh ? '已完成' : 'ready'}</span>}</div>
             {round.feedback && <p className="studio-round-feedback">{zh ? '本轮反馈：' : 'Feedback: '}{round.feedback}</p>}
+            {busy === 'drafts' && <ProcessProgress ready={round.candidates.filter(c => c.status === 'ready').length} total={round.candidates.length} active={Math.max(0, round.candidates.findIndex(c => c.status === 'generating'))} progress={draftProgress?.taskId === round.candidates.find(c => c.status === 'generating')?.id ? draftProgress : null} zh={zh} />}
             <div className="studio-candidate-grid">{round.candidates.map((candidate, index) => <button key={candidate.id} className={`studio-candidate ${selectedPath === candidate.path && candidate.path ? 'selected' : ''}`} aria-label={zh ? `选择图稿 ${index + 1}` : `Choose option ${index + 1}`} aria-pressed={!!candidate.path && selectedPath === candidate.path} disabled={!!busy || candidate.status !== 'ready'} onClick={() => candidate.path && onChoose(candidate.path)}>
-              <div className="studio-candidate-image">{candidate.path && draftUrls[candidate.path] ? <img src={draftUrls[candidate.path]} alt={zh ? `候选绣稿 ${index + 1}` : `Design option ${index + 1}`} /> : <div className="studio-candidate-placeholder">{candidate.status === 'generating' && <div className="studio-spinner" />}<span>{candidate.status === 'error' ? (zh ? '未完成' : 'Not completed') : candidate.status === 'ready' ? (zh ? '预览暂不可用' : 'Preview unavailable') : candidate.status === 'generating' ? (zh ? '正在生成…' : 'Creating…') : (zh ? '等待生成' : 'Queued')}</span></div>}</div>
+              <div className="studio-candidate-image">{candidate.path && draftUrls[candidate.path] ? <img src={draftUrls[candidate.path]} alt={zh ? `候选绣稿 ${index + 1}` : `Design option ${index + 1}`} /> : <div className="studio-candidate-placeholder"><span>{candidate.status === 'error' ? (zh ? '未完成' : 'Not completed') : candidate.status === 'ready' ? (zh ? '预览暂不可用' : 'Preview unavailable') : candidate.status === 'generating' ? (zh ? '正在生成…' : 'Creating…') : (zh ? '等待生成' : 'Queued')}</span></div>}</div>
               <div className="studio-candidate-caption"><b>{String(index + 1).padStart(2, '0')}</b>{candidate.path && selectedPath === candidate.path && <span>{zh ? '已选 ✓' : 'Selected ✓'}</span>}</div>
             </button>)}</div>
-            {busy === 'drafts' && <p className="studio-batch-status" role="status">{status || (zh ? '正在准备四张图稿…' : 'Preparing four options…')}</p>}
             {!busy && round.candidates.some(c => c.status !== 'ready') && <button className="studio-secondary studio-retry" onClick={() => onRetry(round.id)}>{zh ? '补齐这一组' : 'Retry missing options'}</button>}
             {round.candidates.some(c => c.error) && <details className="studio-round-errors"><summary>{zh ? '失败原因' : 'Why some failed'}</summary>{round.candidates.filter(c => c.error).map(c => <p key={c.id}>{c.error}</p>)}</details>}
           </div> : <div className="studio-stage">{displayedView === 'stitches' && stitches ? <StitchPreview stitches={stitches} progress={1} hidden={layers} /> : <PanZoomStage url={(displayedView === 'original' ? imageUrl : artworkUrl) ?? imageUrl} />}</div>}

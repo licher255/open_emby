@@ -1,5 +1,5 @@
 /** Draft generation: goes through the engine's stylize harness; the provider decides cloud or local. */
-import type { StylizeHarnessResult } from '../../shared/types'
+import type { DraftProgress, StylizeHarnessResult } from '../../shared/types'
 
 export interface DraftOptions {
   engineUrl: string
@@ -12,6 +12,7 @@ export interface DraftOptions {
   widthMm?: number
   requestId?: string
   retry?: boolean
+  onProgress?: (progress: DraftProgress) => void
 }
 
 export async function generateDraft(imagePath: string, opts: DraftOptions): Promise<StylizeHarnessResult> {
@@ -47,20 +48,26 @@ export async function generateDraft(imagePath: string, opts: DraftOptions): Prom
   }
   const submitted = JSON.parse(text) as { id: string }
   if (!submitted.id) throw new Error('Engine returned no task id')
+  opts.onProgress?.({ taskId: submitted.id, stage: 'queued' })
   const deadline = Date.now() + 30 * 60_000
   while (Date.now() < deadline) {
     let status: Response
     try {
       status = await fetch(`${base}/api/harness/jobs/${encodeURIComponent(submitted.id)}`, { signal: AbortSignal.timeout(15_000) })
     } catch {
+      opts.onProgress?.({ taskId: submitted.id, stage: 'reconnecting' })
       // Polling is safe to retry because generation belongs to the durable job.
       await new Promise(resolve => setTimeout(resolve, 1000))
       continue
     }
     if (!status.ok) throw new Error(`Cannot read draft task ${submitted.id}: HTTP ${status.status}`)
-    const job = await status.json() as { phase: string; result?: StylizeHarnessResult; error?: string }
-    if (job.phase === 'succeeded' && job.result) return job.result
+    const job = await status.json() as { phase: string; progress?: Omit<DraftProgress, 'taskId'>; result?: StylizeHarnessResult; error?: string }
+    if (job.phase === 'succeeded' && job.result) {
+      opts.onProgress?.({ taskId: submitted.id, stage: 'completed' })
+      return job.result
+    }
     if (!['queued', 'running'].includes(job.phase)) throw new Error(`Draft task ${submitted.id}: ${job.error ?? job.phase}`)
+    opts.onProgress?.({ taskId: submitted.id, ...(job.progress ?? { stage: job.phase === 'queued' ? 'queued' : 'generating' }) })
     await new Promise(resolve => setTimeout(resolve, 350))
   }
   throw new Error(`Draft task ${submitted.id} is still pending. Its result can be retrieved from ${base}/api/harness/jobs/${submitted.id}`)

@@ -31,7 +31,8 @@ export function registerIpc(): void {
   ipcMain.handle(IpcChannels.engineGenerateDraft, async (e, args: { imagePath: string; maxColors: number; intent: string; style?: 'clean' | 'soft'; seed?: number; requestId?: string; retry?: boolean }) => {
     const s = getSettings()
     if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', message: '正在生成绣稿…' })
-    const result = await generateDraft(args.imagePath, { engineUrl: s.engineUrl, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: args.seed ?? randomInt(0, 0x100000000), requestId: args.requestId, retry: args.retry })
+    const result = await generateDraft(args.imagePath, { engineUrl: s.engineUrl, maxColors: args.maxColors, intent: args.intent, style: args.style, seed: args.seed ?? randomInt(0, 0x100000000), requestId: args.requestId, retry: args.retry,
+      onProgress: progress => { if (!e.sender.isDestroyed()) e.sender.send(IpcChannels.engineProgress, { type: 'status', ...progress }) } })
     return `data:image/png;base64,${readFileSync(result.rawPath).toString('base64')}`
   })
   ipcMain.handle(IpcChannels.engineRepairRegion, async (_e, args: { plan: DigitizePlan; label: number; intent: string }) => {

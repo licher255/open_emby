@@ -21,6 +21,15 @@ export interface EngineProgressEvent {
   message?: string
   value?: number
   max?: number
+  taskId?: string
+  stage?: DraftProgress['stage']
+}
+
+export interface DraftProgress {
+  taskId: string
+  stage: 'queued' | 'loading' | 'encoding' | 'sampling' | 'decoding' | 'saving' | 'generating' | 'reconnecting' | 'completed'
+  value?: number | null
+  max?: number | null
 }
 
 /** 制版方案 —— Agent 产出，用户可交互调整 */
@@ -300,7 +309,7 @@ export interface ModelManifest {
   id: string
   name: string
   family: string
-  runtime: 'sd-cpp' | 'llama-cpp'
+  runtime: 'sd-cpp' | 'llama-cpp' | 'comfy-ui'
   description: string
   license: string
   approxBytes: number
