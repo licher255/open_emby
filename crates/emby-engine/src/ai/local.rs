@@ -54,6 +54,37 @@ fn file_in(manifest: &ModelManifest, dir: &Path, needle: &str) -> Option<PathBuf
     path.is_file().then_some(path)
 }
 
+/// Automatic stylization must choose a tested editor, never an arbitrary checkpoint
+/// just because its filename sorts first. Explicit model selection stays strict.
+pub fn resolve_image(data_root: &Path, wanted: Option<&str>) -> anyhow::Result<models::InstalledModel> {
+    let mut candidates = models::installed(data_root);
+    candidates.retain(|m| m.ready && matches!(m.manifest.runtime, ModelRuntime::SdCpp | ModelRuntime::ComfyUi));
+    candidates.sort_by_key(|m| if m.manifest.family == "qwen-image-2.1" { 0 } else { 1 });
+    let explicit = wanted.filter(|s| !s.trim().is_empty());
+    for model in candidates {
+        if let Some(id) = explicit {
+            if model.manifest.id != id { continue; }
+        } else if model.manifest.files.iter().any(|f| f.name.to_ascii_lowercase().contains("inpainting")) {
+            continue;
+        }
+        let ready = match model.manifest.runtime {
+            ModelRuntime::ComfyUi => super::comfy::validate(data_root, &model),
+            ModelRuntime::SdCpp => {
+                if sd_server_bin(data_root).or_else(|| sd_bin(data_root)).is_none() {
+                    Err(anyhow::anyhow!("stable-diffusion.cpp binary is unavailable"))
+                } else { model_args(&model.manifest, Path::new(&model.dir)).map(|_| ()) }
+            }
+            ModelRuntime::LlamaCpp => unreachable!(),
+        };
+        match ready {
+            Ok(()) => return Ok(model),
+            Err(error) if explicit.is_some() => return Err(error),
+            Err(_) => continue,
+        }
+    }
+    anyhow::bail!("no ready local image editor matches {:?}; register Qwen Image 2.1 with scripts/register-qwen-local.mjs", explicit)
+}
+
 /// Model arguments shared by one-shot CLI calls and the managed server.
 pub fn model_args(manifest: &ModelManifest, dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut args: Vec<String> = Vec::new();
@@ -70,7 +101,7 @@ pub fn model_args(manifest: &ModelManifest, dir: &Path) -> anyhow::Result<Vec<St
             let main = file_in(manifest, dir, "qwen-image").ok_or_else(|| anyhow::anyhow!("Qwen-Image weights are missing"))?;
             args.push("--diffusion-model".into()); args.push(main.to_string_lossy().into());
             if let Some(vae) = file_in(manifest, dir, "vae") { args.push("--vae".into()); args.push(vae.to_string_lossy().into()); }
-            if let Some(encoder) = file_in(manifest, dir, "qwen2.5-vl").or_else(|| file_in(manifest, dir, "qwen2.5")) {
+            if let Some(encoder) = file_in(manifest, dir, "qwen2.5-vl").or_else(|| file_in(manifest, dir, "qwen2.5")).or_else(|| file_in(manifest, dir, "qwen_2.5_vl")) {
                 args.push("--qwen2vl".into()); args.push(encoder.to_string_lossy().into());
             }
         }
@@ -84,8 +115,10 @@ pub fn model_args(manifest: &ModelManifest, dir: &Path) -> anyhow::Result<Vec<St
 
 pub async fn image(app: &AppState, provider: &Provider, req: &ImageRequest) -> anyhow::Result<ImageOutput> {
     let wanted = req.model.clone().or_else(|| Some(provider.image_model.clone()).filter(|s| !s.trim().is_empty()));
-    let model = models::resolve_local(&app.data_root, wanted.as_deref(), ModelRuntime::SdCpp)
-        .ok_or_else(|| anyhow::anyhow!("no image model installed; open Settings -> Models"))?;
+    let model = resolve_image(&app.data_root, wanted.as_deref())?;
+    if model.manifest.runtime == ModelRuntime::ComfyUi {
+        return super::comfy::image(app, provider, &model, req).await;
+    }
     let dir = PathBuf::from(&model.dir);
     let manifest = &model.manifest;
 

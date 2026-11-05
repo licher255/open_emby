@@ -18,6 +18,7 @@ pub fn serve_spec(data_root: &Path, model_id: &str) -> anyhow::Result<ServeSpec>
     let dir = std::path::PathBuf::from(&model.dir);
 
     match model.manifest.runtime {
+        ModelRuntime::ComfyUi => crate::ai::comfy::serve_spec(data_root, &model),
         ModelRuntime::SdCpp => {
             let bin = local::sd_server_bin(data_root).ok_or_else(|| anyhow::anyhow!(
                 "stable-diffusion.cpp server not found: put sd-server.exe in {}/runtime/bin/ or set OPEN_EMBY_SD_SERVER_BIN",

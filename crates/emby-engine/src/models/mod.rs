@@ -20,6 +20,7 @@ pub const EMBEDDED_CATALOG: &str = include_str!("../../assets/model-catalog.json
 pub enum ModelRuntime {
     SdCpp,
     LlamaCpp,
+    ComfyUi,
 }
 
 impl ModelRuntime {
@@ -27,6 +28,7 @@ impl ModelRuntime {
         match self {
             ModelRuntime::SdCpp => "stable-diffusion.cpp",
             ModelRuntime::LlamaCpp => "llama.cpp",
+            ModelRuntime::ComfyUi => "ComfyUI (managed local)",
         }
     }
 }

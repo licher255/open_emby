@@ -6,8 +6,25 @@ use std::{path::{Path, PathBuf}, sync::Arc};
 use tokio::sync::watch;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobProgress {
+    pub stage: String,
+    pub value: Option<u32>,
+    pub max: Option<u32>,
+}
+
+pub fn progress(app: &AppState, id: Option<&str>, stage: &str, steps: Option<(u32, u32)>) {
+    if let Some(id) = id {
+        app.harness_progress.lock().unwrap().insert(id.into(), JobProgress {
+            stage: stage.into(), value: steps.map(|s| s.0), max: steps.map(|s| s.1),
+        });
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<JobProgress>,
     pub id: String,
     #[serde(default = "first_attempt")]
     pub attempt: u32,
@@ -100,7 +117,7 @@ pub fn submit(app: Arc<AppState>, input: StylizeInput) -> anyhow::Result<Job> {
     std::fs::create_dir_all(&artifacts)?;
     let snapshot = artifacts.join("source.input");
     std::fs::copy(&source_path, &snapshot)?;
-    let job = Job { id, attempt, phase: "queued".into(), input, source_snapshot: snapshot.to_string_lossy().into(),
+    let job = Job { progress: None, id, attempt, phase: "queued".into(), input, source_snapshot: snapshot.to_string_lossy().into(),
         route: serde_json::to_value(metadata)?, result: None, error: None };
     publish(&app, &job)?;
     let (cancel, mut cancelled) = watch::channel(false);
@@ -146,6 +163,7 @@ pub fn submit(app: Arc<AppState>, input: StylizeInput) -> anyhow::Result<Job> {
             app.harness_failures.lock().unwrap().insert(running.id.clone(), running.clone());
         }
         cancellations.remove(&running.id);
+        app.harness_progress.lock().unwrap().remove(&running.id);
         drop(cancellations);
         drop(permit);
     });
@@ -154,7 +172,11 @@ pub fn submit(app: Arc<AppState>, input: StylizeInput) -> anyhow::Result<Job> {
 
 pub fn status(app: &AppState, id: &str) -> anyhow::Result<Job> {
     if let Some(job) = app.harness_failures.lock().unwrap().get(id) { return Ok(job.clone()); }
-    read(app, id)
+    let mut job = read(app, id)?;
+    if matches!(job.phase.as_str(), "queued" | "running") {
+        job.progress = app.harness_progress.lock().unwrap().get(id).cloned();
+    }
+    Ok(job)
 }
 
 pub fn cancel(app: &AppState, id: &str) -> anyhow::Result<Job> {

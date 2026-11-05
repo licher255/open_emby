@@ -76,7 +76,15 @@ pub async fn stylize(app: &AppState, input: StylizeInput, route: PreparedRoute, 
     image.save(&snapshot)?;
     use sha2::{Digest, Sha256};
     let source_hash = hex::encode(Sha256::digest(&source_bytes));
-    let (width, height) = generation_size(image.width(), image.height(), 768);
+    let local_model = if route.metadata.provider_kind == ai::ProviderKind::Local {
+        Some(ai::local::resolve_image(&app.data_root, Some(&route.metadata.model_id))?)
+    } else { None };
+    let qwen21 = local_model.as_ref().is_some_and(|m| m.manifest.family == ai::comfy::FAMILY);
+    let defaults = local_model.as_ref().map(|m| &m.manifest.defaults);
+    let (steps, cfg, strength) = if qwen21 { (20, 1.0, 1.0) }
+        else { (defaults.map_or(24, |d| d.steps.max(1)), defaults.map_or(7.0, |d| d.cfg_scale), 0.55) };
+    let (width, height) = if qwen21 { qwen_size(image.width(), image.height()) }
+        else { generation_size(image.width(), image.height(), defaults.map_or(768, |d| d.width.max(64))) };
 
     let provider_is_builtin = route.metadata.provider_kind == ai::ProviderKind::Builtin;
 
@@ -88,20 +96,25 @@ pub async fn stylize(app: &AppState, input: StylizeInput, route: PreparedRoute, 
         "route": route.metadata, "seed": seed, "prompt": prompt,
         "style": input.style, "maxColors": max_colors, "widthMm": input.width_mm,
         "quantizer": "lab-kmeans++-seed42-v1",
-        "generation": { "width": width, "height": height, "strength": 0.55, "steps": 24, "cfgScale": 7.0,
+        "generation": { "width": width, "height": height, "strength": strength, "steps": steps, "cfgScale": cfg,
+            "profile": if qwen21 { "qwen21-doc-baseline-v1" } else { "model-defaults-v1" },
+            "referenceResolution": if qwen21 { Some(512) } else { None },
+            "sampler": if qwen21 { Some("euler") } else { None },
+            "scheduler": if qwen21 { Some("simple") } else { None },
             "seedApplied": route.metadata.provider_kind == ai::ProviderKind::Local }
     });
     jobs::write_json(&recipe_path, &recipe)?;
     let generated = ai::generate_image_with_route(app, &route, ImageRequest {
+        task_id: Some(task_id.into()),
         prompt: prompt.clone(),
         negative: String::new(),
         source_image: Some(snapshot),
-        strength: 0.55,
+        strength,
         width,
         height,
         seed,
-        steps: 24,
-        cfg_scale: 7.0,
+        steps,
+        cfg_scale: cfg,
         model: input.model_id.clone(),
         out_path: Some(if provider_is_builtin { out_dir.join("stylize.png") } else { raw_path.clone() }),
         palette_size: max_colors,
@@ -109,6 +122,7 @@ pub async fn stylize(app: &AppState, input: StylizeInput, route: PreparedRoute, 
 
     // Whatever the model returns, run the digitizing quantization once: controlled
     // colour count and stitchable boundaries are prerequisites for later steps.
+    jobs::progress(app, Some(task_id), "saving", None);
     let (final_path, palette) = if provider_is_builtin {
         (generated.path.clone(), dominant_palette(&generated.path, max_colors)?)
     } else {
@@ -124,6 +138,9 @@ pub async fn stylize(app: &AppState, input: StylizeInput, route: PreparedRoute, 
     recipe["model"] = serde_json::json!(generated.model);
     recipe["palette"] = serde_json::json!(palette);
     recipe["outputs"] = serde_json::json!({ "raw": generated.path, "final": final_path });
+    let actual_size = image::image_dimensions(&generated.path)?;
+    recipe["generation"]["outputWidth"] = serde_json::json!(actual_size.0);
+    recipe["generation"]["outputHeight"] = serde_json::json!(actual_size.1);
     jobs::write_json(&recipe_path, &recipe)?;
 
     Ok(StylizeResult {
@@ -154,6 +171,13 @@ fn generation_size(width: u32, height: u32, longest: u32) -> (u32, u32) {
     let w = ((width as f32 * scale) / 8.0).round().max(1.0) * 8.0;
     let h = ((height as f32 * scale) / 8.0).round().max(1.0) * 8.0;
     (w as u32, h as u32)
+}
+
+/// Matches TextEncodeQwenImage21's 512² reference-area sizing, not a long-edge cap.
+fn qwen_size(width: u32, height: u32) -> (u32, u32) {
+    let ratio = width.max(1) as f64 / height.max(1) as f64;
+    let rounded = |n: f64| ((n / 32.0).round_ties_even().max(1.0) * 32.0) as u32;
+    (rounded((512.0 * 512.0 * ratio).sqrt()), rounded((512.0 * 512.0 / ratio).sqrt()))
 }
 
 /// Recompute the palette from the final pixels so it always matches what will be

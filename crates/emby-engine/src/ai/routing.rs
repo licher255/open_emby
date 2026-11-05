@@ -41,6 +41,9 @@ pub fn prepare(app: &AppState, capability: Capability, provider_id: Option<&str>
                 Ok(wanted.ok_or_else(|| anyhow::anyhow!("no model configured"))?.to_string())
             }
             ProviderKind::Local => {
+                if capability == Capability::Image {
+                    return Ok(local::resolve_image(&app.data_root, wanted)?.manifest.id);
+                }
                 let (runtime, binary) = match capability {
                     Capability::Image => (ModelRuntime::SdCpp, local::sd_server_bin(&app.data_root).or_else(|| local::sd_bin(&app.data_root))),
                     Capability::Chat => (ModelRuntime::LlamaCpp, local::llama_bin(&app.data_root)),
@@ -76,6 +79,9 @@ fn select(
                         else { format!("capability preference; skipped {}", unavailable.join(", ")) },
                 },
             }),
+            Err(error) if capability == Capability::Image && provider.kind == ProviderKind::Local && !provider.image_model.trim().is_empty() => {
+                anyhow::bail!("Configured local image baseline {} is unavailable: {error}. Restore the model/runtime; automatic fallback is disabled.", provider.image_model);
+            }
             Err(error) => unavailable.push(format!("{}: {error}", provider.id)),
         }
     }

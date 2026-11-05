@@ -80,6 +80,7 @@ pub struct AppState {
     pub harness_slots: tokio::sync::Semaphore,
     pub harness_cancels: Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
     pub harness_failures: Mutex<HashMap<String, crate::harness::jobs::Job>>,
+    pub harness_progress: Mutex<HashMap<String, crate::harness::jobs::JobProgress>>,
 }
 
 impl AppState {
@@ -110,6 +111,7 @@ impl AppState {
             harness_slots: tokio::sync::Semaphore::new(1),
             harness_cancels: Mutex::new(HashMap::new()),
             harness_failures: Mutex::new(HashMap::new()),
+            harness_progress: Mutex::new(HashMap::new()),
             runtime: emby_runtime::ServerManager::new(
                 emby_runtime::LocalHost::new(),
                 emby_runtime::ManagerConfig::default(),

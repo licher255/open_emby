@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 pub mod builtin;
+pub mod comfy;
 pub mod local;
 pub mod openai;
 pub mod routing;
@@ -100,6 +101,7 @@ pub fn mask_key(key: &str) -> String {
 /// Image request. The prompt is assembled by a harness; providers never rewrite it.
 #[derive(Debug, Clone, Default)]
 pub struct ImageRequest {
+    pub task_id: Option<String>,
     pub prompt: String,
     pub negative: String,
     pub source_image: Option<PathBuf>,

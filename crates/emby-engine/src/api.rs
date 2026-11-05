@@ -104,7 +104,7 @@ async fn test_provider(State(st): State<Arc<AppState>>, Path(id): Path<String>) 
     match provider.kind {
         ai::ProviderKind::Builtin => Json(json!({ "ok": true, "detail": "the built-in algorithm needs no network" })).into_response(),
         ai::ProviderKind::Local => {
-            let has_sd = ai::local::sd_bin(&st.data_root).is_some();
+            let has_sd = ai::local::resolve_image(&st.data_root, None).is_ok();
             let has_llm = ai::local::llama_bin(&st.data_root).is_some();
             Json(json!({ "ok": has_sd || has_llm, "detail": format!("sd: {} · llama: {}", has_sd, has_llm) })).into_response()
         }
