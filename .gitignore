@@ -39,3 +39,4 @@ __pycache__/
 !/scripts/build-core.mjs
 !/scripts/build-engine.mjs
 !/scripts/dehaze.mjs
+!/scripts/register-qwen-local.mjs
